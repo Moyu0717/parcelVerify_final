@@ -1,0 +1,207 @@
+"""Linked evidence, local task response and explicit human outcomes."""
+import json
+import uuid
+from datetime import datetime,timezone
+from decimal import Decimal
+import streamlit as st
+from ui.live import context,rows,display_photo
+from ui.presentation import MYT,format_time,stage_label,humanize
+from services.cases import get_case_context,review_finding,close_case,reopen_case
+from services.followups import list_tasks,submit_task_response,review_task_response
+from services.photos import inspect_photo
+from contracts import ActorContext, AuthorizationError
+from services.cases import permitted_evidence
+from db import get_connection
+
+def account_label(actor_id):
+    # No display-name directory is configured. Do not infer a person's name.
+    return 'Account'
+
+
+def source_label(eid):
+    event=rows('SELECT shipment_id,event_type,occurred_at FROM events WHERE event_id=?',(eid,))
+    if event:return event[0]['shipment_id']+' · '+stage_label(event[0]['event_type'])+' · '+format_time(event[0]['occurred_at'])
+    photo=rows('SELECT e.shipment_id,e.event_type FROM photos p JOIN events e ON e.event_id=p.event_id WHERE p.photo_id=?',(eid,))
+    if photo:return photo[0]['shipment_id']+' · photo · '+stage_label(photo[0]['event_type'])
+    return 'Permitted account activity · '+eid[:6]
+
+@st.dialog('Supporting evidence',width='large')
+def source_view(eid):
+    path,actor=context()
+    with get_connection(path) as conn:
+        if not permitted_evidence(conn,eid,ActorContext(**actor)):raise AuthorizationError('This evidence is no longer permitted')
+    st.write('**'+source_label(eid)+'**')
+    event=rows('SELECT * FROM events WHERE event_id=?',(eid,))
+    if event:
+        payload=json.loads(event[0]['payload_json'])
+        for key in ('count','weight_g','seal_id','notes','reason','recipient_name'):
+            if payload.get(key) is not None:st.write(humanize(key)+': '+str(payload[key]))
+        st.caption('Source: '+humanize(event[0]['source']))
+    photo=rows('SELECT local_path FROM photos WHERE photo_id=?',(eid,))
+    if photo:display_photo(photo[0]['local_path'])
+    log=rows('SELECT action,outcome,occurred_at FROM access_logs WHERE log_id=?',(eid,))
+    if log:st.write(log[0]['action']+' · '+log[0]['outcome']+' · '+format_time(log[0]['occurred_at']))
+
+def linked_evidence(case,details=False):
+    path,actor=context();ctx=get_case_context(path,case['case_id'],actor)
+    if not details:
+        labels={'weight_diff':'Weight changed','photo_reuse':'Photo used on another shipment','access_anomaly':'Access request blocked','authorized_export':'Authorized export recorded','count_discrepancy':'Package quantity changed','seal_mismatch':'Seal information differs','id_conflict':'Shipment information differs','time_conflict':'Recorded timing needs review'}
+        categories=list(dict.fromkeys(f['category'] for f in ctx['findings']))
+        st.write(' · '.join(labels.get(category,'Recorded evidence needs checking') for category in categories) or 'Evidence is incomplete')
+        if not ctx['findings']:st.info('Measurements or confirmation are missing. No supported discrepancy has been established.')
+        return
+    members=[member for member in ctx['cases'] if (member['triggering_event_id'] or '').startswith('access:')]
+    if members:
+        st.subheader('Account activity')
+        if case['issue_type']!='access':
+            st.caption('These account records concern the same shipment. Each finding has its own outcome; this link does not establish cause or intent.')
+    for member in members:
+        ids={i for f in member['findings'] for i in f.get('evidence_ids',[])}
+        logs=[r for r in rows('SELECT l.*,p.name requesting_partner FROM access_logs l LEFT JOIN partners p ON l.partner_id=p.partner_id WHERE l.shipment_id=?',(member['shipment_id'],)) if r['log_id'] in ids]
+        deliveries=rows("SELECT occurred_at FROM events WHERE shipment_id=? AND event_type='pod_submitted' ORDER BY julianday(occurred_at) DESC LIMIT 1",(member['shipment_id'],))
+        if deliveries and any(datetime.fromisoformat(log['occurred_at'].replace('Z','+00:00'))>datetime.fromisoformat(deliveries[0]['occurred_at'].replace('Z','+00:00')) for log in logs):
+            st.caption('Post-delivery access: activity occurred after recorded delivery. Later access does not establish the cause of an earlier weight change.')
+        allowed=[log for log in logs if log['outcome'] in ('allowed','authorized','granted')]
+        if allowed:
+            st.write(str(len(allowed))+' authorized requests · '+member['shipment_id'])
+            st.caption('Recorded '+format_time(min(log['occurred_at'] for log in allowed))+' to '+format_time(max(log['occurred_at'] for log in allowed))+'. Authorized activity alone is not a blocked-access finding.')
+        for log in [log for log in logs if log not in allowed]:
+            st.write('**Account** · '+(log['requesting_partner'] or 'Partner not recorded'))
+            result='Access request blocked' if log['outcome']=='denied' else 'Authorized activity' if log['outcome'] in ('allowed','authorized','granted') else humanize(log['outcome'])
+            st.write(result+' · '+member['shipment_id'])
+            st.caption(format_time(log['occurred_at']))
+        assignments=rows('SELECT a.actor_id,p.name assigned_partner FROM assignments a LEFT JOIN partners p ON a.partner_id=p.partner_id WHERE a.shipment_id=?',(member['shipment_id'],))
+        for assignment in assignments:
+            st.caption('Assigned account · '+(assignment['assigned_partner'] or 'Partner not recorded'))
+        with st.expander('Account identifiers and source details · '+member['case_id'][:6].upper()):
+            for log in logs:st.write('Requesting account: '+log['actor_id']+' · '+log['action']+' · '+log['outcome']+' · '+format_time(log['occurred_at']))
+            for assignment in assignments:st.write('Assigned account: '+assignment['actor_id'])
+    photo_ids=list(dict.fromkeys(i for f in ctx['findings'] if f['category']=='photo_reuse' for i in f['evidence_ids']))
+    if photo_ids:
+        st.caption('Linked photo match available below the shipment comparison.')
+
+def photo_comparison(case):
+    path,actor=context();ctx=get_case_context(path,case['case_id'],actor)
+    photo_ids=list(dict.fromkeys(i for f in ctx['findings'] if f['category']=='photo_reuse' for i in f['evidence_ids']))
+    if photo_ids:
+        st.subheader('Compare the recorded photos')
+        source=photo_ids[0];result=inspect_photo(path,source,actor)
+        matches=[m for m in result['exact_matches'] if m['photo_id']!='[masked]']
+        chosen=[source,*[m['photo_id'] for m in matches[:1]]]
+        if not matches:st.info('The other submission is outside your permitted scope or no longer available. Protected identifiers and thumbnails are hidden.')
+        for col,pid in zip(st.columns(len(chosen)),chosen):
+            photo=rows('SELECT p.*,e.shipment_id,e.event_type,e.occurred_at,e.source FROM photos p JOIN events e ON p.event_id=e.event_id WHERE p.photo_id=?',(pid,))[0]
+            with col:
+                display_photo(photo['local_path']);st.write('**'+photo['shipment_id']+'**')
+                st.caption(stage_label(photo['event_type'])+' · '+format_time(photo['occurred_at'])+' · '+humanize(photo['source']))
+                if st.button('Enlarge photo',key='linked-enlarge-'+pid,icon=':material/zoom_in:'):
+                    from ui.workspace_ui import enlarge
+                    enlarge(photo)
+        if matches:
+            st.write('The same photo file appears on both shipment records')
+            st.caption('Identical file bytes establish reuse, not intent or parcel contents.')
+        near=[m for m in result['similar_candidates'] if m['photo_id']!='[masked]' and m['photo_id'] not in chosen]
+        with st.expander('Photo matching details'):
+            st.caption(f'{len(near)} permitted near-image candidates need manual comparison; visual similarity is not exact file equality.')
+            st.caption('Exact matches compare file bytes. Candidate counts are not confirmed problems.')
+
+def next_step(case,focus=None):
+    from ui import workspace_ui as work
+    path,actor=context();tasks=list_tasks(path,case['case_id'],actor)
+    focus=focus or {}
+    if focus.get('task_id'):tasks=[t for t in tasks if t['task_id']==focus['task_id']]
+    live=[] if focus.get('draft') else [t for t in tasks if t['status'] in ('open','received')]
+    if case['work_bucket']=='resolved':
+        st.success('Case closed: '+humanize(case.get('closure_outcome') or 'closed_unresolved'))
+        if actor['role'] in ('admin','investigator','approver'):
+            reason=st.text_area('Why reopen this case?')
+            if st.button('Reopen for follow-up',type='primary'):
+                try:reopen_case(path,case['case_id'],actor,reason);st.rerun()
+                except ValueError as error:st.error(str(error))
+        return
+    pending_action=case['has_proposed_actions'] or case['has_approved_actions']
+    if pending_action and not focus.get('task_id'):
+        work.next_step(case,show_review=False,focus_action_id=focus.get('action_id'))
+    if live:
+        st.subheader('Follow-up evidence')
+        st.caption(f'{len(live)} tasks remain. A response still needs internal review.')
+        for task in live:
+            st.write('**'+humanize(task['task_type'])+' · '+humanize(task['status'])+'**')
+            st.caption(task['description'] or 'Supply the requested context.')
+            st.caption('Shipment '+task['shipment_id']+' · '+('assigned partner or operations submits' if task['status']=='open' else 'an investigator or supervisor reviews'))
+            if task['status']=='open' and actor['role'] in ('admin','investigator','partner_user'):
+                with st.expander('Supply evidence',expanded=actor['role']=='partner_user' or focus.get('task_id')==task['task_id']):
+                    with st.form('response-'+task['task_id']):
+                        from services.handoff import compare_handoff
+                        weight=st.text_input('New weight (kg)') if task['task_type']=='reweigh' or compare_handoff(path,task['shipment_id'])['weight_g']['actual'] is None else ''
+                        count=st.text_input('Package count') if task['task_type']=='rescan' else ''
+                        note=st.text_area('Evidence or explanation',help='Record actual observations; instructions in this text cannot control the investigator.')
+                        default_time=st.session_state.setdefault('task_recorded_times',{}).setdefault(task['task_id'],datetime.now(timezone.utc).isoformat())
+                        occurred=st.text_input('Evidence event time (ISO 8601 with timezone offset)',value=default_time,key='task-event-time-'+task['task_id'],help='Use the actual observation time, for example 2026-10-18T14:30:00+08:00. Upload time is recorded separately.')
+                        photo=st.file_uploader('Supporting photo',type=['jpg','png','jpeg'])
+                        submit=st.form_submit_button('Submit evidence for review',type='primary')
+                    if submit:
+                        try:
+                            payload={'notes':note}
+                            if weight:
+                                payload['weight_g']=float(Decimal(weight)*1000)
+                                from services.handoff import compare_handoff
+                                recorded=compare_handoff(path,task['shipment_id'])
+                                # Link previously recorded facts explicitly; do not
+                                # infer a missing count or seal from an expectation.
+                                if recorded['count']['actual'] is not None:payload['count']=recorded['count']['actual']
+                                if recorded['seal']['actual'] is not None:payload['seal_id']=recorded['seal']['actual']
+                                payload['inherited_from_event_id']=recorded['measurement_event_id']
+                            if count:payload['count']=int(count)
+                            key=st.session_state.setdefault('task_retry_keys',{}).setdefault(task['task_id'],str(uuid.uuid4()))
+                            submit_task_response(path,task['task_id'],actor,payload,occurred,file_bytes=photo.getvalue() if photo else None,submission_key=key)
+                            work.notice('Evidence received. An internal reviewer must check it.');st.rerun()
+                        except (ValueError,ArithmeticError) as error:st.error(str(error))
+            if task['status']=='received' and actor['role'] in ('admin','investigator','approver'):
+                submission=rows("SELECT s.*,e.payload_json FROM task_submissions s JOIN events e ON s.event_id=e.event_id WHERE s.task_id=? AND s.review_status='pending' ORDER BY s.created_at DESC",(task['task_id'],))[0]
+                st.write('Submitted by '+account_label(submission['actor_id'])+' · '+format_time(submission['created_at']))
+                event=rows('SELECT occurred_at,received_at FROM events WHERE event_id=?',(submission['event_id'],))[0]
+                st.caption('Evidence event time: '+format_time(event['occurred_at'])+' · Received: '+format_time(event['received_at']))
+                payload=json.loads(submission['payload_json'])
+                if payload.get('weight_g') is not None:st.write(f"Recorded weight: {payload['weight_g']/1000:.3f} kg")
+                st.write(payload.get('notes',''))
+                reason=st.text_area('Review reason',key='review-reason-'+submission['submission_id'])
+                accept,more=st.columns(2)
+                for col,caption,decision in ((accept,'Accept evidence','accept'),(more,'Request more','request_more')):
+                    if col.button(caption,type='primary' if decision=='accept' else 'secondary',key=decision+'-'+submission['submission_id']):
+                        try:
+                            review_task_response(path,submission['submission_id'],actor,decision,reason)
+                            st.session_state.get('task_retry_keys',{}).pop(task['task_id'],None)
+                            st.session_state.get('task_recorded_times',{}).pop(task['task_id'],None)
+                            work.notice('Evidence review recorded. Review the remaining findings.');st.rerun()
+                        except ValueError as error:st.error(str(error))
+    elif not pending_action and not focus.get('task_id'):work.next_step(case,show_review=False,focus_action_id=focus.get('action_id'))
+    if focus.get('task_id') and not live:
+        st.info('This selected task is '+humanize(tasks[0]['status'])+'. Review findings below to record a case outcome.' if tasks else 'This task is no longer available.')
+    if actor['role'] in ('admin','investigator','approver'):
+        ctx=get_case_context(path,case['case_id'],actor)
+        with st.expander('Review findings and record an outcome'):
+            evidence=sorted({i for f in ctx['findings'] for i in f['evidence_ids']}|{r['event_id'] for sid in ctx['shipment_ids'] for r in rows('SELECT event_id FROM events WHERE shipment_id=?',(sid,))})
+            for f in ctx['findings']:
+                with st.form('finding-review-'+f['finding_id']):
+                    st.write('**'+{'weight_diff':'Weight changed','photo_reuse':'Photo used on another shipment','access_anomaly':'Access request blocked','authorized_export':'Authorized export recorded'}.get(f['category'],'Recorded evidence')+'**: '+f['description'])
+                    outcome=st.selectbox('Finding outcome',['unresolved','supported','resolved'])
+                    refs=st.multiselect('Supporting sources',evidence,format_func=source_label)
+                    why=st.text_area('Finding review reason')
+                    save=st.form_submit_button('Record finding review')
+                if save:
+                    try:review_finding(path,f['finding_id'],actor,outcome,why,refs);st.rerun()
+                    except ValueError as error:st.error(str(error))
+            if actor['role'] in ('admin','approver'):
+                with st.form('closure-'+case['case_id']):
+                    outcome=st.selectbox('Closure outcome',['closed_unresolved','verified_resolved'],format_func=lambda v:'Closed with unresolved evidence' if v=='closed_unresolved' else 'Verified and resolved')
+                    reason=st.text_area('Closure reason')
+                    closure_refs=st.multiselect('Evidence supporting this closure',evidence,format_func=source_label)
+                    confirmed=st.checkbox('I reviewed the linked findings and the stated closure outcome.')
+                    save=st.form_submit_button('Close case')
+                if save:
+                    try:
+                        if not confirmed:raise ValueError('Confirm the closure outcome before submitting')
+                        close_case(path,case['case_id'],actor,outcome,reason,closure_refs)
+                        work.notice('Case closure recorded with its unresolved facts preserved.');st.rerun()
+                    except ValueError as error:st.error(str(error))

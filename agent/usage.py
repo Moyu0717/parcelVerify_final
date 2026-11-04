@@ -1,0 +1,40 @@
+"""Atomic, shared on-disk demo request guard; never a provider billing control."""
+import hashlib
+import json
+import os
+import sqlite3
+import time
+from pathlib import Path
+from agent.configuration import bounded_setting
+
+class UsageLimit(ValueError):
+    def __init__(self,message,retry_after=None):
+        super().__init__(message);self.retry_after=retry_after
+
+def reserve_request(estimated_tokens):
+    root=Path(os.getenv('PV_DATA_DIR',str(Path(__file__).resolve().parents[1]/'data'/'workspaces')))
+    root.mkdir(parents=True,exist_ok=True)
+    with sqlite3.connect(str(root/'groq-usage.db'),timeout=5) as conn:
+        conn.execute('CREATE TABLE IF NOT EXISTS requests (at REAL NOT NULL, estimated_tokens INTEGER NOT NULL)')
+        conn.execute('BEGIN IMMEDIATE')
+        now=time.time()
+        conn.execute('DELETE FROM requests WHERE at < ?', (now-86400,))
+        day=conn.execute('SELECT COUNT(*),COALESCE(SUM(estimated_tokens),0) FROM requests').fetchone()
+        minute=conn.execute('SELECT COUNT(*),COALESCE(SUM(estimated_tokens),0) FROM requests WHERE at>=?',(now-60,)).fetchone()
+        # Defaults stay under Groq's published gpt-oss limits (8K tokens/min, 200K tokens/day).
+        minute_tokens=bounded_setting('GROQ_MINUTE_TOKENS',7500,250000)
+        if day[0]>=bounded_setting('GROQ_GLOBAL_DAILY',60,300) or day[1]+estimated_tokens>bounded_setting('GROQ_DAILY_TOKENS',150000,2000000):
+            raise UsageLimit('The shared demo daily AI limit is reached. Continue manual review and try later.')
+        if minute[0]>=10 or minute[1]+estimated_tokens>minute_tokens:
+            oldest=conn.execute('SELECT MIN(at) FROM requests WHERE at>=?',(now-60,)).fetchone()[0]
+            retry_after=max(.05,oldest+60.05-now) if oldest is not None and estimated_tokens<=minute_tokens else None
+            raise UsageLimit('A temporary demo AI usage limit is reached. Continue manual review and try again later.',retry_after)
+        conn.execute('INSERT INTO requests VALUES (?,?)',(now,estimated_tokens))
+
+def evidence_snapshot(conn, actor):
+    """Conservative invalidation on any relevant evidence or permission change."""
+    digest=hashlib.sha256(json.dumps(actor.model_dump(),sort_keys=True).encode())
+    for table in ('events','photos','access_logs','assignments','contract_history','case_members','case_findings','finding_reviews','case_decisions'):
+        for row in conn.execute('SELECT * FROM '+table+' ORDER BY rowid'):
+            digest.update(json.dumps(list(row),sort_keys=True,default=str).encode())
+    return digest.hexdigest()
