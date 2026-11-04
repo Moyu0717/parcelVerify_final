@@ -19,7 +19,7 @@ An English logistics investigation prototype for monitoring external partners an
 | Reasonable explanation | PV-SHIP-011 | `1966db7`, new app | Completed in about 2 minutes with 4 requests. Verdict "consistent", citing the approved repackaging. No request filed. |
 | Missing evidence | PV-SHIP-021 | `1966db7`, new app | Completed in about 1 minute with 4 requests. It names the missing handoff weight. No new request; the case already has an open "Provide handoff weight" task. |
 
-These are single demonstration runs, not a stability measurement. Records are in `qa/artifacts/` locally (not committed).
+These are single demonstration runs, not a stability measurement. A local end-to-end walkthrough of the new UI (request, blocked self-approval, supervisor approval and send, partner reply, evidence review, supervisor closure) passed on synthetic data on 5 November. Records are in `qa/artifacts/` locally (not committed).
 
 ## Run locally
 
@@ -66,7 +66,7 @@ Each browser receives a separate synthetic dataset. Save the private recovery to
 
 **Separation of duties.** The person who proposes a request cannot approve it (they may withdraw it by rejecting it), every approve/reject decision needs a written reason of at least 10 characters, and the AI agent identity (`AGENT-…`) can never approve or apply a request. A self-approved historic request cannot be applied. These rules run on the server, not only in the UI. In the demo one browser can switch roles, so this shows the control, not production identity isolation.
 
-**Main limitations.** Package-count shortfalls are marked "per-item scan status unknown, needs review" because the data has no reliable per-item scan records. Access-pattern detection only checks shipments that have a recorded workload baseline; it is not a general enumeration detector. It has not been shown that ParcelVerify saves review time or reduces false positives. The AI reads text records only: it never inspects photos, and the server removes any sentence claiming what a photo shows. Full list: [limitations](docs/KNOWN_LIMITATIONS.md).
+**Main limitations.** Package-count shortfalls are marked "per-item scan status unknown, needs review" because the data has no reliable per-item scan records. Access-pattern detection only checks shipments that have a recorded workload baseline; it is not a general enumeration detector. It has not been shown that ParcelVerify saves review time or reduces false positives. The AI reads text records only: it never inspects photos, and the server removes any sentence claiming what a photo shows. Report wording can still be imprecise: in the PV-SHIP-011 acceptance run the summary said the approved repackaging "added 150 g" although the parcel was 150 g lighter. The verdict was correct, but reviewers should read the cited records, not only the summary. Full list: [limitations](docs/KNOWN_LIMITATIONS.md).
 
 See [deployment](docs/DEPLOYMENT.md), [test report](docs/TEST_REPORT.md), [limitations](docs/KNOWN_LIMITATIONS.md) and the [demo walkthrough](docs/DEMO_SCRIPT.md). The live app and its acceptance runs are listed under Current release above.
 
