@@ -314,7 +314,7 @@ def agent_recommendation(path,case,report,actor,state):
             st.write('• '+fact['text'])
             with st.container(key='ai-fact-chips-'+str(fact_index)):
                 for identifier in dict.fromkeys(fact['evidence_ids']):
-                    if st.button(identifier,key='report-source-'+str(fact_index)+'-'+identifier,help=source_label(identifier)):
+                    if st.button(identifier[:8],key='report-source-'+str(fact_index)+'-'+identifier,help=source_label(identifier)+' · '+identifier):
                         source_view(identifier)
         st.markdown('**Possible legitimate explanations**')
         for item in report.get('alternative_explanations') or []:st.write('• '+item)
@@ -351,7 +351,7 @@ def agent_proposal_card(path,case,report,actor,allow_prefill=True):
     if proposal.get('draft_message'):st.write('Message to the partner (fixed wording): '+proposal['draft_message'])
     with st.container(key='ai-proposal-chips'):
         for identifier in dict.fromkeys(proposal['evidence_ids']):
-            if st.button(identifier,key='proposal-source-'+identifier,help=source_label(identifier)):source_view(identifier)
+            if st.button(identifier[:8],key='proposal-source-'+identifier,help=source_label(identifier)+' · '+identifier):source_view(identifier)
     st.caption('A person must approve and send the request. Using this proposal only preselects the Step 1 form.')
     tasks,actions=flow.load(case)
     if (not stored and actor['role'] in ('admin','investigator') and flow.phase_of(case,tasks,actions)=='check'
@@ -389,7 +389,7 @@ def agent_trace(run_id,diagnostics=None):
                     st.html('<div class="trace-withheld">result too large, withheld from AI</div>')
                 with st.container(key='ai-trace-chips-'+tool['tool_exec_id']):
                     for identifier in dict.fromkeys(ids):
-                        if st.button(identifier,key='trace-source-'+tool['tool_exec_id']+'-'+identifier,help=source_label(identifier)):
+                        if st.button(identifier[:8],key='trace-source-'+tool['tool_exec_id']+'-'+identifier,help=source_label(identifier)+' · '+identifier):
                             source_view(identifier)
         for name in diagnostics.get('withheld_tools',[]):
             if not any(tool['tool_name']==name for tool in trace):
