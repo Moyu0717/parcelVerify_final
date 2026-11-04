@@ -346,6 +346,9 @@ def detail(case):
         st.title(heading)
         st.caption(case["shipment_id"]+" · Case "+case["case_id"][:6].upper()+" · "+explanation)
         st.html(flow.progress_html(phase))
+    if actor["role"]!="partner_user":
+        with st.container(key="ai-explanation"):
+            work.ai_summary(case)
     step,where=st.columns([1.2,1],gap="large")
     with step:
         with st.container(key="action-panel"):
@@ -377,10 +380,6 @@ def detail(case):
             linked_evidence(case,details=True)
             with st.popover("All shipment checks and source records",use_container_width=True):
                 work.shipment_evidence(case["shipment_id"])
-    with st.expander("🤖 AI review agent",expanded=actor["role"] in ("admin","investigator","approver")):
-        with st.container(key="ai-explanation"):
-            st.caption("The agent picks read-only tools, collects evidence with IDs, then recommends one next step. Every claim is checked against the evidence, and a person always decides.")
-            work.ai_summary(case)
     if case["issue_type"]!="access":work.add_evidence(case["shipment_id"])
     work.activity(case)
     if actor["role"]!="partner_user":

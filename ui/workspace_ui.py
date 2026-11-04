@@ -250,41 +250,17 @@ def access_evidence(case):
 def ai_summary(case):
     from services.ai_state import case_ai_state
     path,actor=context()
-    if actor["role"]=="partner_user":
-        st.caption("AI reviews are available to internal reviewers. You can still review the evidence.")
-        return
+    if actor["role"]=="partner_user":return
     state=case_ai_state(path,case["case_id"],actor)
     report=state['report']
-    level='success' if state['state']=='completed' else 'info'
+    level=('success' if state['state']=='completed' else 'info' if state['state'] in
+           ('not_started','missing_configuration','config_disabled','running') else 'warning')
     getattr(st,level)(state['message'])
     if state['retry_at']:st.caption('Available after '+format_time(state['retry_at']))
     if state['reference'] and state['state'] not in ('not_started','completed','outdated'):
         st.caption('Review reference: '+state['reference'][-8:])
-    record=state['report_record'] if report else None
-    trace_run=record['run_id'] if record else state['reference']
-    if trace_run:agent_trace(trace_run,state['diagnostics'] if trace_run==state['reference'] else None)
-    if report:
-        from ui.case_workflow import source_label,source_view
-        st.caption(('Previous saved review' if state['previous_report'] else 'Saved review')+' · '+format_time(record['created_at'])+' · '+str(record.get('model_name') or 'Groq')+(' · earlier records' if state['report_outdated'] else ''))
-        with st.container(border=True,key='ai-recommendation'):
-            st.markdown('**AI recommendation** · '+{'consistent':'Evidence is consistent','requires_review':'Human review is needed','needs_review':'Human review is needed','insufficient_evidence':'More evidence is needed'}[report['verdict']])
-            st.write(report['summary'])
-            if report['recommended_action']:
-                st.info('Suggested next step: '+ACTION_LABELS.get(report['recommended_action'],report['recommended_action'])+'. A person must approve it; the AI cannot act.')
-            st.markdown('**Retrieved evidence behind each fact**')
-            for fact_index,fact in enumerate(report['facts']):
-                st.write('• '+fact['text'])
-                cols=st.columns(max(1,min(3,len(fact['evidence_ids']))))
-                for n,identifier in enumerate(fact['evidence_ids']):
-                    if cols[n%len(cols)].button(source_label(identifier),key='report-source-'+str(fact_index)+'-'+identifier,icon=':material/description:'):source_view(identifier)
-            if report.get('alternative_explanations'):
-                st.markdown('**Possible legitimate explanations**')
-                for item in report['alternative_explanations']:st.write('• '+item)
-            if report['missing_evidence']:
-                st.markdown('**What is missing**')
-                for item in report['missing_evidence']:st.write('• '+item)
-            agent_proposal_card(path,case,report,actor)
-            st.caption('Safeguards passed: every fact cites evidence a tool returned · no blame, fraud or photo claims · read-only tools only · a person decides. '+(report.get('limitations') or 'Text records only. AI does not inspect photographs or approve actions.'))
+    st.html('<p class="eyebrow">AI REVIEW AGENT</p><h3>Investigate this case</h3>')
+    st.caption('Read-only tools collect evidence with IDs. Server retrieval and AI selections are labelled separately. A person approves and sends any request.')
     token=ai_request_token(case['case_id'])
     if actor['role'] in ('admin','investigator') and st.button(state['action'],disabled=not state['can_run'],key='ai-'+case['case_id']+'-'+token):
         with st.spinner('Reviewing the available evidence…'):
@@ -292,6 +268,29 @@ def ai_summary(case):
         st.rerun()
     if state['state']=='running' and st.button('Refresh review status'):
         st.rerun()
+    record=state['report_record'] if report else None
+    trace_run=record['run_id'] if record else state['reference']
+    diagnostics=state['diagnostics']
+    if trace_run and trace_run!=state['reference']:
+        saved=rows('SELECT diagnostics_json FROM investigation_runs WHERE run_id=?',(trace_run,))
+        try:diagnostics=json.loads(saved[0]['diagnostics_json'] or '{}') if saved else {}
+        except (ValueError,TypeError):diagnostics={}
+    if trace_run or report:
+        with st.container(key='ai-agent-grid'):
+            trace_column,recommendation_column=st.columns(2,gap='medium')
+            with trace_column:
+                if trace_run:agent_trace(trace_run,diagnostics)
+                if diagnostics.get('proposal_dropped'):
+                    st.html('<div class="proposal-check">Proposal checked against retrieved findings: failed</div>')
+                    st.caption(diagnostics['proposal_dropped'])
+                elif report and report.get('proposed_action'):
+                    st.html('<div class="proposal-check">Proposal checked against retrieved findings: passed</div>')
+                else:st.caption('No proposal-check result recorded.')
+            with recommendation_column:
+                if report:
+                    st.caption(('Previous saved review' if state['previous_report'] else 'Saved review')+' · '+format_time(record['created_at'])+' · '+str(record.get('model_name') or 'Groq')+(' · earlier records' if state['report_outdated'] else ''))
+                    agent_recommendation(path,case,report,actor,state)
+                else:st.caption('The recommendation appears here when a validated review is saved.')
     if actor['role']=='admin':
         with st.expander('AI review diagnostics'):
             st.caption('Provider: Groq · Selected model: '+provider_settings()['model'])
@@ -303,30 +302,64 @@ def ai_summary(case):
             st.download_button('Download AI diagnostic record',json.dumps({'run':state['run'],'tools':trace},indent=2),file_name='parcelverify-ai-diagnostic.json')
             if trace:st.json(trace)
 
+
+def agent_recommendation(path,case,report,actor,state):
+    from ui.case_workflow import source_label,source_view
+    with st.container(key='ai-recommendation'):
+        verdict={'consistent':'Evidence is consistent','requires_review':'Human review is needed','needs_review':'Human review is needed','insufficient_evidence':'More evidence is needed'}[report['verdict']]
+        st.html('<div class="recommendation-top"><span>AI recommendation</span><b>'+escape(verdict)+'</b></div>')
+        st.write(report['summary'])
+        st.markdown('**Retrieved evidence behind each fact**')
+        for fact_index,fact in enumerate(report['facts']):
+            st.write('• '+fact['text'])
+            with st.container(key='ai-fact-chips-'+str(fact_index)):
+                for identifier in dict.fromkeys(fact['evidence_ids']):
+                    if st.button(identifier,key='report-source-'+str(fact_index)+'-'+identifier,help=source_label(identifier)):
+                        source_view(identifier)
+        st.markdown('**Possible legitimate explanations**')
+        for item in report.get('alternative_explanations') or []:st.write('• '+item)
+        if not report.get('alternative_explanations'):st.caption('None recorded in this review.')
+        st.markdown('**What is missing**')
+        for item in report['missing_evidence']:st.write('• '+item)
+        if not report['missing_evidence']:st.caption('No missing evidence listed in this review.')
+        agent_proposal_card(path,case,report,actor,allow_prefill=not state['report_outdated'] and not state['previous_report'])
+        st.caption(report.get('limitations') or 'Text records only. AI does not inspect photographs or approve actions.')
+
+
 PROPOSAL_STATUS={'proposed':'AI proposed · waiting for a supervisor','approved':'Approved by a supervisor · waiting to be sent',
  'executed':'Approved and sent','rejected':'Rejected by a supervisor','expired':'Expired'}
 
-def agent_proposal_card(path,case,report,actor):
-    """'AI proposed' is shown only when the request is stored; otherwise offer to submit it again."""
-    from agent.runner import agent_proposal_status, submit_agent_proposal
-    from ui.case_workflow import source_label
+
+def agent_proposal_card(path,case,report,actor,allow_prefill=True):
+    """Show stored status truthfully; using a suggestion only prefills the human form."""
+    from agent.runner import agent_proposal_status,AGENT_PROPOSABLE_ACTIONS
+    from ui.case_workflow import source_label,source_view
+    from ui import flow
     proposal=report.get('proposed_action')
-    st.markdown('**AI proposed request**')
+    stored=agent_proposal_status(path,case['case_id'],proposal) if proposal else None
+    st.markdown('**Proposed next step**' if stored else '**Suggested next step (not filed)**')
+    if stored:st.write(PROPOSAL_STATUS.get(stored['status'],stored['status']))
     if not proposal:
-        st.caption('No action proposed. The AI found no follow-up request it could ground in the evidence.')
+        if report.get('recommended_action'):
+            st.write(ACTION_LABELS.get(report['recommended_action'],report['recommended_action']))
+        st.caption('No grounded action proposal is recorded. Continue with a manual review.')
         return
+    if proposal['action_type'] in AGENT_PROPOSABLE_ACTIONS:
+        st.html('<span class="proposal-tier">T1 · needs supervisor approval</span>')
     st.write(ACTION_LABELS.get(proposal['action_type'],proposal['action_type'])+' · for '+source_label(proposal['source_event_id']))
     st.write('AI reasoning (not sent): '+proposal['reason'])
-    if proposal.get('draft_message'):st.caption('Message to the partner (fixed wording): '+proposal['draft_message'])
-    stored=agent_proposal_status(path,case['case_id'],proposal)
-    if stored:
-        st.info(PROPOSAL_STATUS.get(stored['status'],stored['status'])+'. The AI cannot approve or send it.')
-        return
-    st.warning('Report complete; the proposal is not yet submitted as a request.')
-    if actor['role'] in ('admin','investigator') and st.button('Submit AI proposal for approval',key='agent-proposal-'+case['case_id']):
-        out=submit_agent_proposal(path,case['case_id'],report,actor)
-        if out['status']=='not_submitted':st.error(out['message'])
-        else:st.rerun()
+    if proposal.get('draft_message'):st.write('Message to the partner (fixed wording): '+proposal['draft_message'])
+    with st.container(key='ai-proposal-chips'):
+        for identifier in dict.fromkeys(proposal['evidence_ids']):
+            if st.button(identifier,key='proposal-source-'+identifier,help=source_label(identifier)):source_view(identifier)
+    st.caption('A person must approve and send the request. Using this proposal only preselects the Step 1 form.')
+    tasks,actions=flow.load(case)
+    if (not stored and actor['role'] in ('admin','investigator') and flow.phase_of(case,tasks,actions)=='check'
+            and proposal['action_type'] in AGENT_PROPOSABLE_ACTIONS):
+        if st.button('Use this proposal',key='agent-proposal-'+case['case_id'],disabled=not allow_prefill):
+            st.session_state['choice-'+case['case_id']]=flow.ASK
+            st.session_state['request-type-'+case['case_id']]=proposal['action_type']
+
 
 TOOL_PURPOSE={'get_case_context':'Read the case findings and linked handoffs','get_shipment_timeline':'Read every recorded stop and photo ID',
  'compare_handoff':'Compare weight, count and seal with dispatch','find_photo_reuse':'Check if a photo was used on another shipment',
@@ -334,26 +367,39 @@ TOOL_PURPOSE={'get_case_context':'Read the case findings and linked handoffs','g
  'get_vendor_context':'Read the partner contract','get_partner_metrics':'Read partner evidence metrics (context only)'}
 
 def agent_trace(run_id,diagnostics=None):
-    """Show which read-only tools the agent called and what evidence each returned."""
-    from ui.case_workflow import source_label
-    trace=rows('SELECT tool_name,parameters_json,evidence_ids_json,source,duration_ms FROM tool_executions WHERE run_id=? ORDER BY created_at,rowid',(run_id,))
+    """Number persisted tool selections and distinguish server work from AI choices."""
+    from ui.case_workflow import source_label,source_view
+    trace=rows('SELECT tool_exec_id,tool_name,parameters_json,result_summary,evidence_ids_json,source,duration_ms FROM tool_executions WHERE run_id=? ORDER BY created_at,rowid',(run_id,))
     diagnostics=diagnostics or {}
-    with st.container(border=True,key='ai-agent-trace'):
-        st.markdown('**Agent trace** · '+str(len(trace))+' tool call'+('' if len(trace)==1 else 's'))
+    with st.container(key='ai-agent-trace'):
+        st.markdown('**Agent trace** · '+str(len(trace))+' recorded step'+('' if len(trace)==1 else 's'))
         if not trace:st.caption('No tool was called in this review.')
         for n,tool in enumerate(trace,1):
             try:params=json.loads(tool['parameters_json'] or '{}')
             except ValueError:params={}
             try:ids=json.loads(tool['evidence_ids_json'] or '[]')
             except ValueError:ids=[]
-            chosen='chosen by AI' if tool['source']=='agent' else 'fixed safety plan'
-            st.markdown('**Step '+str(n)+'** · `'+tool['tool_name']+'('+(', '.join(k+'='+str(v) for k,v in params.items()))+')` · '+chosen)
-            st.caption(TOOL_PURPOSE.get(tool['tool_name'],'Read-only record lookup')+' → '+(str(len(ids))+' evidence record'+('' if len(ids)==1 else 's')+': '+'; '.join(source_label(i) for i in ids[:4])+(' …' if len(ids)>4 else '') if ids else 'no evidence returned'))
+            provenance={'agent':'chosen by AI','server_prefetch':'run by server','server_plan':'run by server',
+                        'duplicate_selection':'already loaded, not re-run'}.get(tool['source'],'source not recorded')
+            with st.container(key='ai-trace-step-'+tool['tool_exec_id']):
+                st.html('<div class="trace-heading"><span>Step '+str(n)+' · '+escape(provenance)+'</span><code>'+escape(tool['tool_name'])+'</code></div>')
+                st.caption(', '.join(k+'='+str(v) for k,v in params.items()))
+                st.write(tool['result_summary'] or TOOL_PURPOSE.get(tool['tool_name'],'Read-only record lookup'))
+                if tool['tool_name'] in diagnostics.get('withheld_tools',[]):
+                    st.html('<div class="trace-withheld">result too large, withheld from AI</div>')
+                with st.container(key='ai-trace-chips-'+tool['tool_exec_id']):
+                    for identifier in dict.fromkeys(ids):
+                        if st.button(identifier,key='trace-source-'+tool['tool_exec_id']+'-'+identifier,help=source_label(identifier)):
+                            source_view(identifier)
+        for name in diagnostics.get('withheld_tools',[]):
+            if not any(tool['tool_name']==name for tool in trace):
+                st.caption(name+' · result too large, withheld from AI')
         notes=[]
         if diagnostics.get('protocol')=='json_selection':notes.append('Groq rejected a native function call, so the agent picked tools as checked JSON instead.')
         if diagnostics.get('selection_fallback')=='server_plan':notes.append('The model could not pick a valid tool, so the server ran its fixed read-only plan; the report is still written by the model and checked.')
         if diagnostics.get('retry_count'):notes.append('Retries used: '+str(diagnostics['retry_count'])+'.')
         if notes:st.caption(' '.join(notes))
+
 
 def next_step(case,show_review=True,focus_action_id=None):
     path,actor=context()

@@ -139,6 +139,33 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
 }
 @media (prefers-reduced-motion:reduce){.pv-progress::after,.stat-card,.order-row{transition:none}}
 
+/* AI review agent: persisted trace and recommendation, above the human form. */
+.st-key-ai-explanation{background:var(--card);border:2px solid var(--black);border-radius:24px;padding:20px 22px;box-shadow:var(--shadow);margin-bottom:20px}
+.st-key-ai-agent-grid [data-testid="stColumn"]{min-width:0}
+[class*="st-key-ai-trace-step-"]{background:var(--canvas);border-radius:12px;padding:10px 12px;font-size:13px;overflow-wrap:anywhere}
+.trace-heading{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.trace-heading span{font-size:10px;font-weight:800;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+.trace-heading code{background:var(--black);color:var(--yellow);padding:1px 6px;border-radius:6px;font-size:12px;overflow-wrap:anywhere}
+.proposal-check,.trace-withheld{background:var(--yellow-soft);color:#70540c;border-radius:12px;padding:10px 12px;font-size:13px}
+.st-key-ai-recommendation{background:var(--black);color:#fff;border-radius:18px;padding:16px;font-size:13.5px;line-height:1.5;overflow-wrap:anywhere}
+.st-key-ai-recommendation [data-testid="stMarkdownContainer"]{color:#fff;font-size:13.5px}
+.st-key-ai-recommendation [data-testid="stCaptionContainer"],.st-key-ai-recommendation [data-testid="stCaptionContainer"] *{color:#c4c6c0!important}
+.recommendation-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.recommendation-top span{color:var(--yellow);font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.recommendation-top b{font-size:12px;background:rgba(255,255,255,.1);padding:4px 8px;border-radius:999px}
+.proposal-tier{display:inline-block;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:var(--yellow);color:var(--black)}
+[class*="st-key-ai-trace-chips-"],[class*="st-key-ai-fact-chips-"],.st-key-ai-proposal-chips{display:flex;flex-flow:row wrap!important;gap:4px!important}
+[class*="st-key-ai-trace-chips-"]>.stElementContainer,[class*="st-key-ai-fact-chips-"]>.stElementContainer,.st-key-ai-proposal-chips>.stElementContainer{width:auto;max-width:100%;flex:0 1 auto}
+[class*="st-key-trace-source-"] button,[class*="st-key-report-source-"] button,[class*="st-key-proposal-source-"] button{font-family:ui-monospace,Menlo,Consolas,monospace;min-height:30px;border-radius:999px;padding:2px 8px;background:rgba(127,127,127,.18);color:inherit;border:0;max-width:100%}
+[class*="st-key-trace-source-"] button p,[class*="st-key-report-source-"] button p,[class*="st-key-proposal-source-"] button p{font-size:11px;overflow-wrap:anywhere}
+.st-key-ai-recommendation [class*="st-key-agent-proposal-"] button{background:var(--yellow);border-color:var(--yellow);color:var(--black)}
+.st-key-ai-recommendation [class*="st-key-agent-proposal-"] button [data-testid="stMarkdownContainer"]{color:var(--black)}
+@media(max-width:767px){
+  .st-key-ai-explanation{padding:16px 14px}
+  .st-key-ai-agent-grid>[data-testid="stHorizontalBlock"]{flex-wrap:wrap}
+  .st-key-ai-agent-grid [data-testid="stColumn"]{width:100%!important;min-width:100%!important;flex:1 1 100%!important}
+}
+
 /* Step 1: reference typography, visible desktop role control and hint strip.
    Keep the existing theme handling; do not force a browser colour scheme. */
 .stApp button,.stApp input,.stApp textarea{font-family:var(--font)}

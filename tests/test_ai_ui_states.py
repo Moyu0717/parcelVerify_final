@@ -15,7 +15,7 @@ def test_case_settings_failure_retry_and_navigation_do_not_duplicate(app,monkeyp
     widget(app.button,'Review evidence with AI').click().run()
     healthy(app)
     assert len(provider.calls)==1
-    case_messages=[x.value for x in app.info if x.value.startswith('AI could not')]
+    case_messages=[x.value for x in app.warning if x.value.startswith('AI could not')]
     assert len(case_messages)==1
     app.session_state.secondary_view='Settings';app.run();healthy(app)
     assert any(x.value==case_messages[0] for x in app.info)
