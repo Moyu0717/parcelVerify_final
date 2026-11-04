@@ -175,10 +175,10 @@ def city_cases(cohort):
 def home():
     cohort=work.cases()
     counts=review_counts(cohort)
-    candidates=sorted((c for c in cohort if c['work_bucket']=='needs_review'),key=lambda c:c['priority_score'] or 0,reverse=True)
-    first=candidates[0] if candidates else None
+    next_id=flow.next_case_id(None) if counts['needs_review'] else None
+    first=next((c for c in cohort if c['case_id']==next_id),None)
     with st.container(key="welcome"):
-        scene,intro=st.columns([1.45,1],gap="large")
+        scene,intro=st.columns([1.45,1],gap="large",vertical_alignment="center")
         with scene:
             opened=city_scene(city_cases(cohort),first["case_id"] if first else None)
             if opened:
@@ -189,7 +189,7 @@ def home():
             st.write("Tap a building on the map, or let us pick the most urgent case for you.")
             if first:
                 with st.container(key="next-card"):
-                    st.html('<div class="next-card"><span class="tag">NEXT UP</span><strong>'+esc(first["shipment_id"])+'</strong><span>'+esc(issue_info(first)[0])+' · '+esc(first["partner_name"] or "Partner")+'</span></div>')
+                    st.html('<div class="next-card"><span class="tag">Next up</span><strong>'+esc(first["shipment_id"])+'</strong><span>'+esc(issue_info(first)[0])+'</span><small>'+esc(first["partner_name"] or "Partner not recorded")+'</small><span class="status attention">Needs review</span></div>')
                     st.button("Start next review",key="start-next-review",type="primary",icon=":material/arrow_forward:",on_click=work.route,kwargs={"case_id":first['case_id']},use_container_width=True)
             else:
                 st.success("No new reviews waiting. Check your follow-ups below.")
@@ -201,7 +201,7 @@ def home():
                 st.html('<div class="stat-card'+(' active' if bucket==value else '')+'"><span class="stat-icon">'+icon+'</span><b>'+str(counts[value])+'</b><strong>'+title+'</strong><small>'+hint+'</small></div>')
                 st.button("Show "+title.lower()+" ("+str(counts[value])+")",key="counter-"+value,on_click=home_filter,args=(value,),use_container_width=True)
     st.html('<ol class="how-it-works"><li><b>1</b>Check the difference</li><li><b>2</b>Ask the partner for proof</li><li><b>3</b>Review the reply</li><li><b>4</b>Finish the case</li></ol>')
-    label=next(name for name,value in work.FILTERS.items() if value==bucket)
+    label=BUCKET_STYLE[bucket][1]
     st.html('<div class="review-intro"><h2>My cases</h2><span>'+esc(label)+'</span></div>')
     with st.container(key="home-search"):
         search,kind=st.columns([2.2,1])
@@ -209,7 +209,8 @@ def home():
         selected=kind.selectbox("Evidence type",["All","Shipment evidence","Data access"],key="home_kind",label_visibility="collapsed")
     queue=[c for c in cohort if c["work_bucket"]==bucket and (selected=="All" or selected=="Data access" and c.get("contains_access") or selected=="Shipment evidence" and c["issue_type"]=="shipment") and (not query or query.lower() in " ".join((c["shipment_id"],c["partner_name"] or "",*issue_info(c),c["case_id"])).lower())]
     queue.sort(key=lambda c:c["priority_score"] or 0,reverse=True)
-    for case in queue[:8]:issue_row(case)
+    with st.container(key="home-case-rows"):
+        for case in queue[:8]:issue_row(case)
     if not queue:st.info("No cases match this list. Choose another card above or change the search.")
     if len(queue)>8:
         st.caption(f"Showing 8 of {len(queue)} cases.")
