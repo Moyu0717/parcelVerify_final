@@ -21,8 +21,8 @@ from ui.presentation import ACTION_LABELS, format_time, format_weight, humanize
 
 STEPS = ('Check', 'Ask for proof', 'Review reply', 'Finish')
 STEP_OF = {'check': 0, 'approve': 1, 'send': 1, 'waiting': 2, 'review': 2, 'finish': 3, 'closed_ok': 3, 'closed_open': 3}
-FRIENDLY = {'request_reweigh': '⚖️ Weigh it again', 'request_rephoto': '📷 Take a new photo',
-            'request_rescan': '🔢 Count the packages', 'submit_to_contract_ops': '📋 Refer to operations'}
+FRIENDLY = {'request_reweigh': 'Weigh it again', 'request_rephoto': 'Take a new photo',
+            'request_rescan': 'Count the packages', 'submit_to_contract_ops': 'Refer to operations'}
 ROLE_NAMES = {'admin': 'Administrator', 'investigator': 'Investigator', 'approver': 'Supervisor', 'partner_user': 'Partner'}
 ASK, FINISH = 'Ask the partner for proof', 'Finish the case'
 
@@ -265,11 +265,11 @@ def ask_form(case, values, concern, by_id, selected, path, actor):
     if st.session_state.get(type_key) not in choices:
         st.session_state[type_key] = choices[0]
     with st.container(key='proof-request-form'):
-        action_type = st.radio('What proof do you need?', choices, key=type_key, format_func=lambda a: FRIENDLY[a], horizontal=True)
+        action_type = st.radio('What proof do you need?', choices, key=type_key, format_func=lambda a: FRIENDLY[a])
     target = default_target(list(by_id.values()), selected)
     if target:
         node = by_id[target]
-        st.html('<div class="target-pill">📍 At <b>' + escape(node['label']) + '</b> · ' + escape(node['time']) + '<small>Tap another building on the map to change it</small></div>')
+        st.html('<div class="target-pill">At <b>' + escape(node['label']) + '</b> · ' + escape(node['time']) + '<small>Tap another building on the map to change it</small></div>')
     initial = ('The handover weight is ' + work.difference_weight(values['weight_g']['diff']) + ' than the dispatch record. Please provide a fresh measurement.'
                if action_type == 'request_reweigh' and values['weight_g']['diff'] else concern + '. Please provide supporting proof.')
     reason = work.draft_input('text_area', 'Message to the partner', case['case_id'], 'request-reason', value=initial, max_chars=2000, height=140)
@@ -293,7 +293,7 @@ def ask_form(case, values, concern, by_id, selected, path, actor):
 def finish_form(case, phase, values, path, actor):
     from ui import workspace_ui as work
     outcome_key = 'outcome-' + case['case_id']
-    labels = {'verified_resolved': '✅ Verified — the evidence checks out', 'closed_unresolved': '⚠️ Close with open questions'}
+    labels = {'verified_resolved': 'Verified — the evidence checks out', 'closed_unresolved': 'Close with open questions'}
     if st.session_state.get(outcome_key) not in labels:
         st.session_state[outcome_key] = 'verified_resolved' if phase == 'finish' else 'closed_unresolved'
     outcome = st.radio('Outcome', list(labels), key=outcome_key, format_func=labels.get)

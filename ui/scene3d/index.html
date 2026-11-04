@@ -13,14 +13,14 @@ canvas.drag{cursor:grabbing}canvas.hot{cursor:pointer}
 #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .chip{position:absolute;left:0;top:0;transform:translate(-50%,-100%);display:flex;align-items:center;gap:6px;background:#fff;border:0;border-radius:999px;padding:6px 11px;font:600 12px Inter,"Segoe UI",Arial,sans-serif;color:#17191a;box-shadow:0 6px 18px rgba(20,22,20,.16);white-space:nowrap;pointer-events:auto;cursor:pointer;transition:opacity .25s,transform .25s}
 .chip .dot{width:8px;height:8px;border-radius:50%;background:#b9bdb4;flex:none}
-.chip.diff .dot{background:#f5c542}.chip.miss .dot{background:#fff;border:2px dashed #555}.chip.ok .dot{background:#34b36a}.chip.work .dot{background:#4d8fe0}
+.chip.diff .dot{background:#e5484d}.chip.miss .dot{background:#fff;border:2px dashed #555}.chip.ok .dot{background:#34b36a}.chip.work .dot{background:#4d8fe0}
 .chip.sel{background:#17191a;color:#fff}.chip.sel .dot{box-shadow:0 0 0 2px #fff}
 .chip.status{background:#f5c542;color:#17191a;font-weight:700}.chip.status.green{background:#34b36a;color:#fff}.chip.status.blue{background:#4d8fe0;color:#fff}.chip.status.dark{background:#17191a;color:#fff}
 .chip.small{padding:4px 8px;font-size:11px}
 .chip.hidden{opacity:0;pointer-events:none}
 .chip:focus-visible,.hud button:focus-visible,.strip button:focus-visible{outline:3px solid #b98318;outline-offset:2px}
 .hud{position:absolute;top:14px;right:14px;display:flex;gap:8px;z-index:3}
-.hud button{width:40px;height:40px;border-radius:50%;border:0;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:16px;cursor:pointer;color:#17191a}
+.hud button{width:40px;height:40px;border-radius:50%;border:0;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:10px;font-weight:700;cursor:pointer;color:#17191a}
 .badge{position:absolute;left:14px;bottom:14px;z-index:3;background:rgba(255,255,255,.94);border-radius:999px;padding:9px 14px;font-size:13px;color:#4c514a;box-shadow:0 4px 14px rgba(0,0,0,.08);max-width:calc(100% - 28px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badge b{color:#17191a}
 .legend{position:absolute;left:14px;top:14px;z-index:3;display:flex;flex-wrap:wrap;gap:6px;max-width:70%}
@@ -46,8 +46,8 @@ canvas.drag{cursor:grabbing}canvas.hot{cursor:pointer}
   <div id="labels" aria-hidden="false"></div>
   <div class="legend" id="legend"></div>
   <div class="hud">
-    <button type="button" id="motion" title="Pause motion" aria-label="Pause motion">❚❚</button>
-    <button type="button" id="reset" title="Reset view" aria-label="Reset view">⟲</button>
+    <button type="button" id="motion" title="Pause motion" aria-label="Pause motion">Pause</button>
+    <button type="button" id="reset" title="Reset view" aria-label="Reset view">Reset</button>
   </div>
   <div class="strip" id="strip" role="group" aria-label="Map locations"></div>
   <div class="badge" id="badge"></div>
@@ -65,7 +65,7 @@ let frameHeight=0;
 const setHeight=h=>{if(h!==frameHeight){frameHeight=h;send('streamlit:setFrameHeight',{height:h})}};
 
 /* ---------- Palette taken from the reference: white city, yellow focus, charcoal ---------- */
-const C={bg:0xeceee9,ground:0xe3e5df,block:0xf4f4f1,bld:0xfbfbf9,yellow:0xf5c542,black:0x1d1f21,green:0x34b36a,blue:0x4d8fe0,road:0xdfe1db,box:0xc8945c,tape:0xe9d3a8,grey:0xc9ccc4};
+const C={bg:0xeceee9,ground:0xe3e5df,block:0xf4f4f1,bld:0xfbfbf9,yellow:0xf5c542,red:0xe5484d,black:0x1d1f21,green:0x34b36a,blue:0x4d8fe0,road:0xdfe1db,box:0xc8945c,tape:0xe9d3a8,grey:0xc9ccc4};
 const wrap=document.getElementById('wrap'),canvas=document.getElementById('c'),labels=document.getElementById('labels');
 const stripEl=document.getElementById('strip'),badgeEl=document.getElementById('badge'),toastEl=document.getElementById('toast'),legendEl=document.getElementById('legend');
 let reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -187,10 +187,10 @@ function makeHQ(){const g=new THREE.Group();const b=box(5.4,4.6,5.4,M.black);b.p
   const logo=new THREE.Mesh(new THREE.PlaneGeometry(2.6,2.6),new THREE.MeshBasicMaterial({map:arrowTexture(),transparent:true}));logo.rotation.x=-Math.PI/2;logo.position.y=6.22;
   const band=box(5.46,.3,5.46,M.yellow);band.position.y=4.2;g.add(b,t,logo,band);return g}
 function makeStation(role,look){
-  const g=new THREE.Group();let body;const surface=look==='missing'?new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.22,depthWrite:false}):mat(look==='diff'?C.yellow:C.bld);
+  const g=new THREE.Group();let body;const surface=look==='missing'?new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.22,depthWrite:false}):mat(look==='diff'?C.red:C.bld);
   if(role==='depot'){body=box(5.6,2.4,4.2,surface);body.position.y=1.44;const roof=box(5.8,.3,4.4,look==='missing'?surface:M.block);roof.position.y=2.75;g.add(roof);
     for(let k=-1;k<=1;k++){const door=box(1.1,1.3,.1,M.black);door.position.set(k*1.7,.9,2.12);if(look!=='missing')g.add(door)}}
-  else if(role==='house'){body=box(3.4,2.2,3.4,surface);body.position.y=1.34;const roof=new THREE.Mesh(new THREE.ConeGeometry(2.75,1.6,4),look==='missing'?surface:mat(look==='diff'?C.yellow:C.bld));roof.rotation.y=Math.PI/4;roof.position.y=3.25;roof.castShadow=true;g.add(roof)}
+  else if(role==='house'){body=box(3.4,2.2,3.4,surface);body.position.y=1.34;const roof=new THREE.Mesh(new THREE.ConeGeometry(2.75,1.6,4),look==='missing'?surface:mat(look==='diff'?C.red:C.bld));roof.rotation.y=Math.PI/4;roof.position.y=3.25;roof.castShadow=true;g.add(roof)}
   else{body=box(3.8,3.6,3.8,surface);body.position.y=2.04;const top=box(2.2,1.1,2.2,surface);top.position.y=4.4;g.add(top);
     const wing=box(2,1.8,2.4,surface);wing.position.set(2.6,1.14,.6);g.add(wing)}
   g.add(body);g.userData.surface=surface;g.userData.height=role==='hub'?5:role==='house'?4:3;
@@ -227,7 +227,7 @@ function flyTo(target,zoom,dur=900,yaw){const t0=rig.target.clone(),z0=rig.zoom,
   tween(dur,k=>{rig.target.lerpVectors(t0,target,k);rig.zoom=z0+(zoom-z0)*k;rig.yaw=y0+(y1-y0)*k})}
 document.getElementById('reset').onclick=()=>{userMoved=false;flyTo(home.target,home.zoom,700,home.yaw);rig.pitch=home.pitch};
 const motionBtn=document.getElementById('motion');
-const syncMotion=()=>{motionBtn.textContent=paused?'▶':'❚❚';motionBtn.title=paused?'Resume motion':'Pause motion';motionBtn.setAttribute('aria-label',motionBtn.title)};
+const syncMotion=()=>{motionBtn.textContent=paused?'Play':'Pause';motionBtn.title=paused?'Resume motion':'Pause motion';motionBtn.setAttribute('aria-label',motionBtn.title)};
 motionBtn.onclick=()=>{paused=!paused;syncMotion();dirty=true};syncMotion();
 
 function resize(){if(!renderer)return;const w=wrap.clientWidth||600,h=wrap.clientHeight||400;renderer.setSize(w,h,false);
@@ -235,7 +235,7 @@ function resize(){if(!renderer)return;const w=wrap.clientWidth||600,h=wrap.clien
 new ResizeObserver(resize).observe(wrap);
 
 /* ---------- mode: CITY (home page overview of real cases) ---------- */
-const BUCKET={needs_review:{color:C.yellow,label:'Needs review',css:'#f5c542'},awaiting_approval:{color:C.black,label:'Waiting for approval',css:'#1d1f21'},waiting_evidence:{color:0x8fb8ea,label:'Waiting for partner',css:'#8fb8ea'},resolved:{color:0xdff2e6,label:'Closed',css:'#9fd8b4'}};
+const BUCKET={needs_review:{color:C.red,label:'Needs review',css:'#e5484d'},awaiting_approval:{color:C.black,label:'Waiting for approval',css:'#1d1f21'},waiting_evidence:{color:0x8fb8ea,label:'Waiting for partner',css:'#8fb8ea'},resolved:{color:0xdff2e6,label:'Closed',css:'#9fd8b4'}};
 const LOTS=[[1,1],[-2,2],[2,-2],[-1,-1],[3,1],[0,3],[-3,0],[1,-3],[3,3],[-2,-3],[-3,3],[4,-1],[0,-1],[2,4]];
 let animate=[];
 function buildCityMode(a){
@@ -255,7 +255,7 @@ function buildCityMode(a){
     const main=box(4.2,h,4.2,m);main.position.y=h/2;g.add(main);const top=box(2.4,1.2,2.4,m);top.position.y=h+.6;g.add(top);
     const wing=box(2.4,h*.55,2,mat(C.bld));wing.position.set(-2.2,h*.275,1.6);g.add(wing);
     g.userData.pick={type:'open',id:c.id};pickables.push(g);dynamicGroup.add(g);
-    const pin=makePin(c.bucket==='awaiting_approval'?C.yellow:C.black);pin.position.set(0,h+1.6,0);g.add(pin);animate.push({kind:'bob',o:pin,base:h+1.6,ph:k});
+    const pin=makePin(c.bucket==='needs_review'?C.red:c.bucket==='awaiting_approval'?C.yellow:C.black);pin.position.set(0,h+1.6,0);g.add(pin);animate.push({kind:'bob',o:pin,base:h+1.6,ph:k});
     const important=c.id===a.featured||k<4;
     const label=chip(c.id===a.featured?c.shipment+' · '+c.title:c.shipment,(important?'':'minor ')+(c.id===a.featured?'sel':''),new THREE.Vector3(pos.x,h+5.2,pos.z),()=>openCase(c,pos),c.shipment+': '+c.title+' ('+b.label+'). Open case.');
     label.el.querySelector('.dot').style.background=b.css;
@@ -295,7 +295,7 @@ function buildCaseMode(a){
   buildCity('case-'+(a.case_id||''),reserved);
   if(dynamicGroup){world.remove(dynamicGroup);disposeTree(dynamicGroup)}dynamicGroup=new THREE.Group();world.add(dynamicGroup);
   pickables.length=0;clearChips();animate=[];legendEl.innerHTML='';
-  [['#f5c542','Difference'],['#ffffff','Recorded'],['#4d8fe0','Workflow'],['#34b36a','Accepted']].forEach(([c,t])=>{const s=document.createElement('span');s.innerHTML='<i></i>';s.querySelector('i').style.background=c;if(c==='#ffffff')s.querySelector('i').style.border='1px solid #999';s.append(t);legendEl.append(s)});
+  [['#e5484d','Difference'],['#ffffff','Recorded'],['#4d8fe0','Workflow'],['#34b36a','Accepted']].forEach(([c,t])=>{const s=document.createElement('span');s.innerHTML='<i></i>';s.querySelector('i').style.background=c;if(c==='#ffffff')s.querySelector('i').style.border='1px solid #999';s.append(t);legendEl.append(s)});
   const baseRoute=ribbon(poly,M.routeBase,1);baseRoute.userData.set(poly.len);dynamicGroup.add(baseRoute);
   const journey=ribbon(poly,M.route,.9,.29);dynamicGroup.add(journey);
   const hq=makeHQ();hq.position.copy(HQ_POS);hq.userData.pick={type:'hq',id:'hq'};pickables.push(hq);dynamicGroup.add(hq);
@@ -303,8 +303,8 @@ function buildCaseMode(a){
   const objs=stations.map((n,k)=>{const role=stationRole(n,k,total);const lk=look(n);const g=makeStation(role,lk);g.position.copy(places[k].pos);
     const ang=Math.atan2(places[k].road.x-places[k].pos.x,places[k].road.z-places[k].pos.z);g.rotation.y=ang;
     g.userData.pick={type:'select',id:n.id};pickables.push(g);dynamicGroup.add(g);
-    const ring=makeRing();ring.position.set(places[k].pos.x,.3,places[k].pos.z);ring.visible=false;dynamicGroup.add(ring);
-    let pin=null;if(lk!=='ok'||n.workflow){pin=makePin(n.workflow?C.blue:C.black);pin.position.set(places[k].pos.x,g.userData.height+1.4,places[k].pos.z);dynamicGroup.add(pin);animate.push({kind:'bob',o:pin,base:g.userData.height+1.4,ph:k})}
+    const ring=makeRing(lk==='diff'?C.red:C.yellow);ring.position.set(places[k].pos.x,.3,places[k].pos.z);ring.visible=false;dynamicGroup.add(ring);
+    let pin=null;if(lk!=='ok'||n.workflow){pin=makePin(lk==='diff'?C.red:n.workflow?C.blue:C.black);pin.position.set(places[k].pos.x,g.userData.height+1.4,places[k].pos.z);dynamicGroup.add(pin);animate.push({kind:'bob',o:pin,base:g.userData.height+1.4,ph:k})}
     const accepted=/accepted|reviewed/i.test(n.workflow||'');
     if(accepted){const flag=box(1.4,.3,1.4,M.green);flag.position.set(places[k].pos.x,g.userData.height+.5,places[k].pos.z);dynamicGroup.add(flag)}
     const cls=accepted?'ok':n.workflow?'work':lk==='diff'?'diff':lk==='missing'?'miss':'';
@@ -315,7 +315,7 @@ function buildCaseMode(a){
   stripEl.innerHTML='';
   objs.forEach((o,k)=>{const btn=document.createElement('button');btn.type='button';btn.dataset.id=o.n.id;btn.innerHTML='<span class="n"></span><span></span>';btn.firstChild.textContent=String(k+1).padStart(2,'0');
     btn.lastChild.textContent=o.n.label+(o.n.status==='Difference'?' !':o.n.missing?' ?':'');btn.onclick=()=>select(o.n.id);stripEl.append(btn)});
-  const hb=document.createElement('button');hb.type='button';hb.dataset.id='hq';hb.textContent='★ Next step';hb.onclick=()=>select('hq');stripEl.append(hb);
+  const hb=document.createElement('button');hb.type='button';hb.dataset.id='hq';hb.textContent='Next step';hb.onclick=()=>select('hq');stripEl.append(hb);
   const journeyIdx=Math.max(0,Math.min(total-1,a.journey??total-1));
   cs={a,poly,objs,hq,hqChip,van,parcel,journey,journeyIdx,places,statusChip:null,vanState:null};
   journey.userData.set(0);
@@ -336,7 +336,7 @@ function driveVan(from,to,dur,done){// along HQ spur + main route
     else{const at=cs.poly.at(d-total);v.position.copy(at.pos).setY(.24);const dir=b>=a?at.dir:at.dir.clone().negate();v.rotation.y=-Math.atan2(dir.z,dir.x)}},()=>{placeVan(to);done&&done()})}
 function phaseView(a){
   const phase=a.phase,target=a.van_target||null;
-  const statusText={check:['Start here: check the highlighted record','status'],approve:['⏳ Request waiting for approval','status dark'],send:['✓ Approved · send it to the partner','status'],waiting:['📨 Waiting for the partner reply','status blue'],review:['📦 New evidence arrived · review it','status'],finish:['✓ Proof accepted · finish the case','status green'],closed_ok:['✔ Case verified and closed','status green'],closed_open:['⚑ Closed with open questions','status dark']}[phase]||['Next step','status dark'];
+  const statusText={check:['Start here: check the highlighted record','status'],approve:['Request waiting for approval','status dark'],send:['Approved · send it to the partner','status'],waiting:['Waiting for the partner reply','status blue'],review:['New evidence arrived · review it','status'],finish:['Proof accepted · finish the case','status green'],closed_ok:['Case verified and closed','status green'],closed_open:['Closed with open questions','status dark']}[phase]||['Next step','status dark'];
   const atHQ=['check','approve','send','review','finish','closed_open','closed_ok'].includes(phase);
   return{statusText,van:phase==='waiting'&&target?vanAt(target):{d:-1},carrying:phase==='review',anchor:atHQ?'hq':target}
 }

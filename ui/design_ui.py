@@ -31,7 +31,7 @@ def header(reset_demo=None):
         for col,name in ((home,"Home"),(issues,"Cases"),(partners,"Partners")):
             col.button(name,key="nav-"+name,type="primary" if current==name and not st.session_state.get("secondary_view") else "tertiary",on_click=navigate,args=(name,),use_container_width=True)
         with roles:
-            st.radio("Act as",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key="desktop-role",horizontal=True,on_change=remember_role,args=("desktop",))
+            st.radio("Act as",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key="desktop-role",label_visibility="collapsed",horizontal=True,on_change=remember_role,args=("desktop",))
         if reset_demo:
             reset.button("Reset demo",key="desktop-reset-demo",on_click=reset_demo,help="Open a separate fresh demo. Save your recovery token in Settings to return to this workspace.",use_container_width=True)
         with account.popover("",key='workspace-menu-'+str(generation),icon=":material/account_circle:",use_container_width=True):
@@ -144,7 +144,7 @@ def issue_row(case):
     title,explanation,action,_=issue_info(case)
     tone,_label=BUCKET_STYLE.get(case["work_bucket"],("attention",""))
     with st.container(key="issue-row-"+case["case_id"]):
-        st.html('<div class="order-row"><span class="avatar">'+esc(initials(case["partner_name"]))+'</span><div class="order-main"><strong>'+esc(case["shipment_id"])+' <em>→</em> '+esc(title)+'</strong><small>'+esc(case["partner_name"] or "Partner not recorded")+' · Case '+esc(case["case_id"][:6].upper())+' · '+esc(explanation)+'</small></div><span class="status '+tone+'"><i></i>'+esc(work.label(case))+'</span><span class="chev">›</span></div>')
+        st.html('<div class="order-row"><span class="avatar">'+esc(initials(case["partner_name"]))+'</span><div class="order-main"><strong>'+esc(case["shipment_id"])+' · '+esc(title)+'</strong><small>'+esc(case["partner_name"] or "Partner not recorded")+' · '+esc(explanation)+'</small></div><span class="status '+tone+'"><i></i>'+esc(work.label(case))+'</span><span class="chev">›</span></div>')
         st.button(action+" · "+case["shipment_id"],key="open-"+case["case_id"],on_click=work.route,kwargs={"case_id":case["case_id"]},use_container_width=True)
 
 def shortcut(bucket):
@@ -163,7 +163,7 @@ def show_search():
 def home_filter(bucket):
     st.session_state.home_bucket=bucket
 
-STAT_CARDS=(("needs_review","Needs review","Check these first","🔎"),("awaiting_approval","Waiting for approval","A supervisor decides","✍️"),("waiting_evidence","Waiting for partner","Proof requested","📨"),("resolved","Closed","Decision recorded","✅"))
+STAT_CARDS=(("needs_review","Needs review","Check these first","attention"),("awaiting_approval","Waiting for approval","A supervisor decides","dark"),("waiting_evidence","Waiting for partner","Proof requested","blue"),("resolved","Closed","Decision recorded","resolved"))
 
 def city_cases(cohort):
     ranked=sorted(cohort,key=lambda c:c["priority_score"] or 0,reverse=True)
@@ -189,24 +189,21 @@ def home():
             st.write("Tap a building on the map, or let us pick the most urgent case for you.")
             if first:
                 with st.container(key="next-card"):
-                    st.html('<div class="next-card"><span class="tag">Next up</span><strong>'+esc(first["shipment_id"])+'</strong><span>'+esc(issue_info(first)[0])+'</span><small>'+esc(first["partner_name"] or "Partner not recorded")+'</small><span class="status attention">Needs review</span></div>')
-                    st.button("Start next review",key="start-next-review",type="primary",icon=":material/arrow_forward:",on_click=work.route,kwargs={"case_id":first['case_id']},use_container_width=True)
+                    st.html('<div class="next-card"><span class="tag">Next up</span><strong>'+esc(first["shipment_id"])+'</strong><span>'+esc(issue_info(first)[0])+' · '+esc(first["partner_name"] or "Partner not recorded")+'</span></div>')
+                st.button("Start next review",key="start-next-review",type="primary",icon=":material/arrow_forward:",on_click=work.route,kwargs={"case_id":first['case_id']},use_container_width=True)
             else:
                 st.success("No new reviews waiting. Check your follow-ups below.")
             st.button("Find a shipment",key="home-find",on_click=show_search,type="tertiary",icon=":material/search:")
     bucket=st.session_state.get("home_bucket","needs_review")
     with st.container(key="summary-strip"):
-        for col,(value,title,hint,icon) in zip(st.columns(4),STAT_CARDS):
+        for col,(value,title,hint,tone) in zip(st.columns(4),STAT_CARDS):
             with col,st.container(key="stat-"+value):
-                st.html('<div class="stat-card'+(' active' if bucket==value else '')+'"><span class="stat-icon">'+icon+'</span><b>'+str(counts[value])+'</b><strong>'+title+'</strong><small>'+hint+'</small></div>')
+                st.html('<div class="stat-card'+(' active' if bucket==value else '')+'"><span class="stat-icon '+tone+'" aria-hidden="true"></span><b>'+str(counts[value])+'</b><strong>'+title+'</strong><small>'+hint+'</small></div>')
                 st.button("Show "+title.lower()+" ("+str(counts[value])+")",key="counter-"+value,on_click=home_filter,args=(value,),use_container_width=True)
-    st.html('<ol class="how-it-works"><li><b>1</b>Check the difference</li><li><b>2</b>Ask the partner for proof</li><li><b>3</b>Review the reply</li><li><b>4</b>Finish the case</li></ol>')
     label=BUCKET_STYLE[bucket][1]
     st.html('<div class="review-intro"><h2>My cases</h2><span>'+esc(label)+'</span></div>')
-    with st.container(key="home-search"):
-        search,kind=st.columns([2.2,1])
-        query=search.text_input("Search this list",key="home_query",placeholder="Shipment, partner or case",label_visibility="collapsed")
-        selected=kind.selectbox("Evidence type",["All","Shipment evidence","Data access"],key="home_kind",label_visibility="collapsed")
+    query=st.session_state.get("home_query","")
+    selected=st.session_state.get("home_kind","All")
     queue=[c for c in cohort if c["work_bucket"]==bucket and (selected=="All" or selected=="Data access" and c.get("contains_access") or selected=="Shipment evidence" and c["issue_type"]=="shipment") and (not query or query.lower() in " ".join((c["shipment_id"],c["partner_name"] or "",*issue_info(c),c["case_id"])).lower())]
     queue.sort(key=lambda c:c["priority_score"] or 0,reverse=True)
     with st.container(key="home-case-rows"):
@@ -215,7 +212,11 @@ def home():
     if len(queue)>8:
         st.caption(f"Showing 8 of {len(queue)} cases.")
         st.button("View all cases",key="all-home-cases",on_click=shortcut,args=(bucket,))
-    st.caption("Demo workspace · synthetic records · nothing leaves this demo")
+    with st.container(key="home-search"):
+        search,kind=st.columns([2.2,1])
+        search.text_input("Search this list",key="home_query",placeholder="Shipment, partner or case",label_visibility="collapsed")
+        kind.selectbox("Evidence type",["All","Shipment evidence","Data access"],key="home_kind",label_visibility="collapsed")
+    st.caption("Demo with synthetic records. AI runs only when a person clicks it, and a person approves every request.")
 
 
 def issues():
@@ -307,7 +308,7 @@ def map_panel(case,stations,selected,phase):
     path,actor=context()
     node=next((n for n in stations if n['id']==selected),None)
     if not node:
-        st.html('<p class="eyebrow">ON THE MAP</p><h3 class="step-title">Tap a building</h3><p class="step-copy">Each building is one recorded stop of this parcel. Yellow means a measurement differs; dashed means a record is missing.</p>')
+        st.html('<p class="eyebrow">ON THE MAP</p><h3 class="step-title">Tap a building</h3><p class="step-copy">Each building is one recorded stop of this parcel. Red means a measurement differs; dashed means a record is missing.</p>')
         return
     number=stations.index(node)+1
     tone='attention' if node['status']=='Difference' else 'blue' if node['missing'] else 'resolved'
@@ -336,7 +337,7 @@ def quick_rule_check(case):
         if separator:sentence+='.'
         score=finding.get('score')
         items.append('<li><div><b>'+esc(humanize(finding.get('category')))+'</b><p>'+esc(sentence)+'</p></div>'
-                     +'<span class="rule-score">'+esc('Score: '+str(score) if score is not None else 'Score not recorded')+'</span></li>')
+                     +('<span class="rule-score">'+esc('Score: '+str(score))+'</span>' if score is not None else '')+'</li>')
     st.html('<section class="quick-rule-check" aria-label="Quick rule check"><div class="rule-check-head"><h3>Quick rule check</h3><span>Fixed rules</span></div>'
             +('<ul>'+''.join(items)+'</ul>' if items else '<p>No rule findings recorded.</p>')
             +'<small>Recorded findings only. Review the evidence before deciding.</small></section>')
@@ -365,18 +366,19 @@ def detail(case):
     if actor["role"]!="partner_user":
         with st.container(key="ai-explanation"):
             work.ai_summary(case)
-    step,where=st.columns([1.2,1],gap="large")
-    with step:
-        with st.container(key="action-panel"):
-            st.html('<div id="review-actions"></div>')
-            flow.next_step(case,stations,selected if selected!='hq' else None,concern=title)
-    with where:
-        if actor["role"]!="partner_user":
-            quick_rule_check(case)
-        with st.container(key="map-panel"):
-            map_panel(case,stations,selected,phase)
+    with st.container(key="case-work"):
+        where,step=st.columns([1,1.2],gap="large")
+        with where:
+            with st.container(key="map-panel"):
+                map_panel(case,stations,selected,phase)
+        with step:
+            with st.container(key="action-panel"):
+                st.html('<div id="review-actions"></div>')
+                if actor["role"]!="partner_user":
+                    quick_rule_check(case)
+                flow.next_step(case,stations,selected if selected!='hq' else None,concern=title)
     st.html('<h2 class="section-title">More details</h2>')
-    with st.expander("📄 Evidence and photos",expanded=case["issue_type"]=="access"):
+    with st.expander("Evidence and photos",expanded=case["issue_type"]=="access"):
         linked_evidence(case)
         if case["issue_type"]=="access":
             st.write("A partner account requested a shipment outside its recorded assignment. The access check denied the request; this does not establish intent.")

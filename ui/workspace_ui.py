@@ -262,7 +262,7 @@ def ai_summary(case):
     st.html('<p class="eyebrow">AI REVIEW AGENT</p><h3>Investigate this case</h3>')
     st.caption('Read-only tools collect evidence with IDs. Server retrieval and AI selections are labelled separately. A person approves and sends any request.')
     token=ai_request_token(case['case_id'])
-    if actor['role'] in ('admin','investigator') and st.button(state['action'],disabled=not state['can_run'],key='ai-'+case['case_id']+'-'+token):
+    if actor['role'] in ('admin','investigator') and st.button(state['action'],type='primary',disabled=not state['can_run'],key='ai-'+case['case_id']+'-'+token):
         with st.spinner('Reviewing the available evidence…'):
             run_case_ai(path,case['case_id'],actor,token)
         st.rerun()
