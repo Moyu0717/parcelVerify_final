@@ -21,16 +21,20 @@ def navigate(destination):
     st.session_state.navigation_generation=st.session_state.get('navigation_generation',0)+1
     work.route(destination)
 
-def header():
+def header(reset_demo=None):
     current=st.session_state.setdefault("primary_destination","Home")
     generation=st.session_state.get('navigation_generation',0)
     role=context()[1]["role"]
     with st.container(key="desktop-header"):
-        brand,home,issues,partners,account=st.columns([3.4,1,1,1,1.6],vertical_alignment="center")
+        brand,home,issues,partners,roles,reset,account=st.columns([2.9,.8,.8,.95,4.6,1.3,.65],gap="small",vertical_alignment="center")
         brand.html('<div class="brand"><span class="brand-symbol">↗</span>ParcelVerify<span class="brand-dot">.</span><span class="demo-tag">DEMO</span></div>')
         for col,name in ((home,"Home"),(issues,"Cases"),(partners,"Partners")):
             col.button(name,key="nav-"+name,type="primary" if current==name and not st.session_state.get("secondary_view") else "tertiary",on_click=navigate,args=(name,),use_container_width=True)
-        with account.popover(flow.ROLE_NAMES[role],key='workspace-menu-'+str(generation),icon=":material/account_circle:",use_container_width=True):
+        with roles:
+            st.radio("Act as",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key="desktop-role",horizontal=True,on_change=remember_role,args=("desktop",))
+        if reset_demo:
+            reset.button("Reset demo",key="desktop-reset-demo",on_click=reset_demo,help="Open a separate fresh demo. Save your recovery token in Settings to return to this workspace.",use_container_width=True)
+        with account.popover("",key='workspace-menu-'+str(generation),icon=":material/account_circle:",use_container_width=True):
             secondary_menu("desktop")
     with st.container(key="mobile-header"):
         brand,menu=st.columns([2.5,1],vertical_alignment="center")
@@ -39,16 +43,69 @@ def header():
             for name in ("Home","Cases","Partners"):
                 st.button(name,key="mobile-nav-"+name,on_click=navigate,args=(name,),use_container_width=True)
             secondary_menu("mobile")
+            if reset_demo:
+                st.button("Reset demo",key="mobile-reset-demo",on_click=reset_demo,help="Open a separate fresh demo. Save your recovery token in Settings to return to this workspace.",use_container_width=True)
+    try_this(role)
+
 
 def remember_role(prefix):
     flow.switch_role(st.session_state[prefix+"-role"])
 
 def secondary_menu(prefix):
     role=context()[1]["role"]
-    st.radio("Act as (demo role)",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key=prefix+"-role",on_change=remember_role,args=(prefix,))
+    if prefix=="mobile":
+        st.radio("Act as (demo role)",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key=prefix+"-role",on_change=remember_role,args=(prefix,))
     st.caption("Simulated identities show who may do which step.")
     for name in ("Settings","Help"):
         st.button(name,key=prefix+"-"+name,on_click=set_secondary,args=(name,),use_container_width=True)
+
+def try_this(role):
+    """Presentation-only guidance from the same phase used by the case page."""
+    case=None
+    if st.session_state.get("primary_destination")=="Cases" and not st.session_state.get("secondary_view"):
+        selected=st.session_state.get("selected_case_id")
+        if selected:
+            case=next((c for c in work.cases() if c["case_id"]==selected),None)
+    hint={
+        "admin":"Open a case to review the evidence and choose the next step.",
+        "investigator":"Open a case to review the evidence and choose the next step.",
+        "approver":"Open a case waiting for approval and review the request.",
+        "partner_user":"Open an assigned case to check for a proof request.",
+    }[role]
+    if case:
+        tasks,actions=flow.load(case)
+        phase=flow.phase_of(case,tasks,actions)
+        if phase in ("closed_ok","closed_open"):
+            hint="Review the recorded outcome and activity, or open another case."
+        elif role=="partner_user":
+            hint={
+                "check":"Wait for an approved proof request; review the available case information.",
+                "approve":"Wait for a supervisor to approve the request.",
+                "send":"Wait for the approved request to be sent.",
+                "waiting":"Read the proof request and submit your reply.",
+                "review":"Your reply is awaiting internal review.",
+                "finish":"Evidence review is complete; wait for the internal closure decision.",
+            }[phase]
+        elif role=="approver":
+            hint={
+                "check":"Review the evidence; switch to Investigator to prepare a proof request.",
+                "approve":"Review the request and enter an approval reason; its proposer cannot approve it.",
+                "send":"Review the approved request and send it to the partner.",
+                "waiting":"Wait for the partner to reply to the proof request.",
+                "review":"Review the partner reply against the recorded evidence.",
+                "finish":"Review the evidence and record a closure decision with a reason.",
+            }[phase]
+        else:
+            hint={
+                "check":"Review the evidence, optionally run AI review, then choose the next step.",
+                "approve":"Switch to an independent Supervisor to review the request with an approval reason.",
+                "send":"Send the approved request to the partner.",
+                "waiting":"Wait for the partner reply, or switch to Partner to provide the requested proof.",
+                "review":"Compare the partner reply with the evidence, then accept it or ask again.",
+                "finish":"Choose a closure outcome, explain why, and finish the case.",
+            }[phase]
+    st.html('<div class="try-this" role="status"><b>TRY THIS</b><span>'+esc(hint)+'</span></div>')
+
 
 def set_secondary(name):
     st.session_state.navigation_generation=st.session_state.get('navigation_generation',0)+1

@@ -146,7 +146,7 @@ def main():
     if pending: st.session_state.primary_destination=pending
     if st.session_state.get("primary_destination") not in PAGES:
         st.session_state.primary_destination="Home"
-    header()
+    header(reset_demo=new_workspace)
     message=st.session_state.pop("notice",None)
     if message: getattr(st,message[0])(message[1])
     try:
