@@ -264,14 +264,15 @@ def ask_form(case, values, concern, by_id, selected, path, actor):
         st.session_state[type_key] = preset
     if st.session_state.get(type_key) not in choices:
         st.session_state[type_key] = choices[0]
-    action_type = st.radio('What proof do you need?', choices, key=type_key, format_func=lambda a: FRIENDLY[a])
+    with st.container(key='proof-request-form'):
+        action_type = st.radio('What proof do you need?', choices, key=type_key, format_func=lambda a: FRIENDLY[a], horizontal=True)
     target = default_target(list(by_id.values()), selected)
     if target:
         node = by_id[target]
         st.html('<div class="target-pill">📍 At <b>' + escape(node['label']) + '</b> · ' + escape(node['time']) + '<small>Tap another building on the map to change it</small></div>')
     initial = ('The handover weight is ' + work.difference_weight(values['weight_g']['diff']) + ' than the dispatch record. Please provide a fresh measurement.'
                if action_type == 'request_reweigh' and values['weight_g']['diff'] else concern + '. Please provide supporting proof.')
-    reason = work.draft_input('text_area', 'Message to the partner', case['case_id'], 'request-reason', value=initial, max_chars=2000)
+    reason = work.draft_input('text_area', 'Message to the partner', case['case_id'], 'request-reason', value=initial, max_chars=2000, height=140)
     st.caption('Nothing leaves this demo. A supervisor approves the request first.')
     if st.button('Send request', type='primary', key='send-request-' + case['case_id'], icon=':material/arrow_forward:', use_container_width=True):
         if len(reason.strip()) < 10:

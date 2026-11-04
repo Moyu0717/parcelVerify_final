@@ -522,14 +522,18 @@ def case_summary(case):
     return "\n".join(text).replace("None","Missing")
 
 def activity(case):
-    with st.expander("Activity"):
+    with st.container(key="activity-log"):
+        st.html('<h2 class="section-title">Activity log</h2>')
         from services.case_export import export_case,readable_case
         complete=export_case(context()[0],case['case_id'],context()[1])
         audit={'events':complete['activity']}
         if not audit["events"]: st.caption("No decisions have been recorded yet.")
+        entries=[]
         for event in audit["events"]:
-            st.write("**"+humanize(event["operation"])+"** · "+format_time(event["occurred_at"]))
-            if event["details"].get("reason"): st.write(event["details"]["reason"])
+            reason=event["details"].get("reason")
+            entries.append('<li><time>'+escape(format_time(event["occurred_at"]))+'</time><div><b>'+escape(humanize(event["operation"]))+'</b>'
+                           +('<p>'+escape(str(reason))+'</p>' if reason else '')+'</div></li>')
+        if entries:st.html('<ol class="activity-timeline" aria-label="Recorded activity">'+''.join(entries)+'</ol>')
         for action in rows("SELECT action_type,status FROM action_requests WHERE case_id=?",(case["case_id"],)):
             st.write(ACTION_LABELS.get(action["action_type"],humanize(action["action_type"]))+" · "+status_label(action["status"]))
         st.download_button("Download case summary",readable_case(complete),file_name=case["shipment_id"]+"-case-summary.md",mime="text/markdown")

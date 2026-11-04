@@ -326,6 +326,21 @@ def map_panel(case,stations,selected,phase):
             with st.expander('Photo at this stop'):
                 for photo in photos[:2]:display_photo(photo['local_path'])
 
+def quick_rule_check(case):
+    """Display stored rule findings without deriving scores or re-running checks."""
+    items=[]
+    for finding in case['findings']:
+        description=finding.get('description') or 'No description recorded.'
+        sentence, separator, _=description.partition('. ')
+        if separator:sentence+='.'
+        score=finding.get('score')
+        items.append('<li><div><b>'+esc(humanize(finding.get('category')))+'</b><p>'+esc(sentence)+'</p></div>'
+                     +'<span class="rule-score">'+esc('Score: '+str(score) if score is not None else 'Score not recorded')+'</span></li>')
+    st.html('<section class="quick-rule-check" aria-label="Quick rule check"><div class="rule-check-head"><h3>Quick rule check</h3><span>Fixed rules</span></div>'
+            +('<ul>'+''.join(items)+'</ul>' if items else '<p>No rule findings recorded.</p>')
+            +'<small>Recorded findings only. Review the evidence before deciding.</small></section>')
+
+
 def detail(case):
     path,actor=context()
     title,explanation,_,heading=issue_info(case)
@@ -355,6 +370,8 @@ def detail(case):
             st.html('<div id="review-actions"></div>')
             flow.next_step(case,stations,selected if selected!='hq' else None,concern=title)
     with where:
+        if actor["role"]!="partner_user":
+            quick_rule_check(case)
         with st.container(key="map-panel"):
             map_panel(case,stations,selected,phase)
     st.html('<h2 class="section-title">More details</h2>')
