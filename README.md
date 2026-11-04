@@ -16,10 +16,10 @@ An English logistics investigation prototype for monitoring external partners an
 | Scenario | Shipment | Build | Result |
 |---|---|---|---|
 | Anomaly without explanation | PV-DEMO-001 | `4f4adbe`, new app | Completed in about 4 minutes with 5 requests. One `request_reweigh` was filed on the handover record (fixed wording, status proposed). No blame or photo claims. |
-| Reasonable explanation | PV-SHIP-011 | `4e07f12`, earlier app | Completed, no request filed, so no unnecessary proof was asked for. |
-| Missing evidence | PV-SHIP-021 | `7871a91`, earlier app | Completed, no new request; the case already has an open "Provide handoff weight" workflow. |
+| Reasonable explanation | PV-SHIP-011 | `1966db7`, new app | Completed in about 2 minutes with 4 requests. Verdict "consistent", citing the approved repackaging. No request filed. |
+| Missing evidence | PV-SHIP-021 | `1966db7`, new app | Completed in about 1 minute with 4 requests. It names the missing handoff weight. No new request; the case already has an open "Provide handoff weight" task. |
 
-These are single demonstration runs, not a stability measurement. The two earlier-app runs predate the move to the new repository and have not been repeated there. Records are in `qa/artifacts/` locally (not committed).
+These are single demonstration runs, not a stability measurement. Records are in `qa/artifacts/` locally (not committed).
 
 ## Run locally
 
