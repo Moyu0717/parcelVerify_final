@@ -378,7 +378,25 @@ def test_server_weight_target_rejects_multiple_finding_records_even_if_model_nam
 def test_server_weight_target_cannot_use_only_a_model_cited_record(seeded_db):
     from agent.runner import _resolve_target
     handover, _ = _demo_event(seeded_db, 'handoff_submitted')
+    import json
     pod, _ = _demo_event(seeded_db, 'pod_submitted')
     with get_connection(seeded_db) as conn:
+        # Nothing differs from dispatch, so the measured-record fallback has no candidate either.
+        dispatch=conn.execute("SELECT payload_json FROM events WHERE shipment_id='PV-DEMO-001' AND event_type='dispatch_confirmed'").fetchone()[0]
+        payload=json.loads(conn.execute('SELECT payload_json FROM events WHERE event_id=?',(handover,)).fetchone()[0])
+        payload['weight_g']=json.loads(dispatch)['weight_g']
+        conn.execute('UPDATE events SET payload_json=? WHERE event_id=?',(json.dumps(payload),handover))
         proposal={'action_type':'request_reweigh','source_event_id':handover,'evidence_ids':[handover]}
         assert _resolve_target(conn,proposal,'PV-DEMO-001',[{'evidence_ids':[pod]}]) is None
+
+
+def test_reweigh_falls_back_to_the_record_whose_weight_differs_from_dispatch(seeded_db):
+    """Live 2026-11-04: a valid re-weigh was dropped with 0 candidates (finding evidence did not name the record)."""
+    _, presented = _demo_findings(seeded_db)
+    handover, _ = _demo_event(seeded_db, 'handoff_submitted')
+    pod, _ = _demo_event(seeded_db, 'pod_submitted')
+    weight = {f: dict(v, evidence_ids=[]) for f, v in presented.items() if v['category'] == 'weight_diff'}
+    proposal = {'action_type': 'request_reweigh', 'source_event_id': pod, 'finding_ids': list(weight),
+                'reason': 'r', 'evidence_ids': [pod], 'draft_message': ''}
+    checked, note = _check(seeded_db, proposal, dict(presented, **weight))
+    assert note is None and checked['proposed_action']['source_event_id'] == handover

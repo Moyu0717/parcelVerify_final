@@ -688,8 +688,33 @@ def _resolve_target(conn, proposal, shipment_id, findings, diagnostics=None):
         # The photo finding is about reuse, so the target is the shipment record whose photo matches a photo on
         # another shipment, computed here. Model citations are ignored (live 2026-11-04: they did not pin one record).
         candidates = _reused_photo_events(conn, shipment_id)
+    elif not candidates:
+        # Live 2026-11-04 (new app): a valid re-weigh was dropped with 0 candidates because the finding's
+        # evidence did not name the measured record. Fall back to the record whose measurement actually
+        # differs from dispatch, computed from the stored values (same thresholds as the rules).
+        candidates = _differing_measurement_events(conn, shipment_id, action)
     if diagnostics is not None:diagnostics['candidates'] = candidates[:5]
     return candidates[0] if len(candidates) == 1 else None
+
+
+def _differing_measurement_events(conn, shipment_id, action):
+    """Non-dispatch records whose weight (re-weigh) or count/seal (re-scan) differs from the dispatch record."""
+    from contracts import WEIGHT_DIFF_MIN_G, WEIGHT_DIFF_PCT
+    rows = [(e, t, json.loads(p or '{}')) for e, t, p in conn.execute('SELECT event_id,event_type,payload_json FROM events WHERE shipment_id=? ORDER BY occurred_at', (shipment_id,))]
+    dispatch = next((p for _, t, p in rows if t == 'dispatch_confirmed'), None)
+    if not dispatch:return []
+    out = []
+    for event_id, event_type, payload in rows:
+        if event_type == 'dispatch_confirmed':continue
+        if action == 'request_reweigh':
+            base, value = dispatch.get('weight_g'), payload.get('weight_g')
+            if base is not None and value is not None and abs(float(value) - float(base)) > max(WEIGHT_DIFF_MIN_G, float(base) * WEIGHT_DIFF_PCT):
+                out.append(event_id)
+        elif action == 'request_rescan':
+            if (payload.get('count') is not None and dispatch.get('count') is not None and payload['count'] != dispatch['count']) or \
+               (payload.get('seal_id') is not None and dispatch.get('seal_id') is not None and payload['seal_id'] != dispatch['seal_id']):
+                out.append(event_id)
+    return out
 
 
 def _reused_photo_events(conn, shipment_id):
