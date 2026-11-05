@@ -26,12 +26,12 @@ def header(reset_demo=None):
     generation=st.session_state.get('navigation_generation',0)
     role=context()[1]["role"]
     with st.container(key="desktop-header"):
-        brand,home,issues,partners,roles,reset,account=st.columns([2.9,.8,.8,.95,4.6,1.3,.65],gap="small",vertical_alignment="center")
+        brand,home,issues,partners,log,roles,reset,account=st.columns([2.9,.8,.8,.95,.95,2.2,1.3,.65],gap="small",vertical_alignment="center")
         brand.html('<div class="brand"><span class="brand-symbol">↗</span>ParcelVerify<span class="brand-dot">.</span><span class="demo-tag">DEMO</span></div>')
-        for col,name in ((home,"Home"),(issues,"Cases"),(partners,"Partners")):
+        for col,name in ((home,"Home"),(issues,"Cases"),(partners,"Partners"),(log,"Activity")):
             col.button(name,key="nav-"+name,type="primary" if current==name and not st.session_state.get("secondary_view") else "tertiary",on_click=navigate,args=(name,),use_container_width=True)
         with roles:
-            st.radio("Act as",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key="desktop-role",label_visibility="collapsed",horizontal=True,on_change=remember_role,args=("desktop",))
+            st.selectbox("Act as",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=lambda r:"Act as: "+flow.ROLE_NAMES[r],key="desktop-role",label_visibility="collapsed",on_change=remember_role,args=("desktop",))
         if reset_demo:
             reset.button("Reset demo",key="desktop-reset-demo",on_click=reset_demo,help="Open a separate fresh demo. Save your recovery token in Settings to return to this workspace.",use_container_width=True)
         with account.popover("",key='workspace-menu-'+str(generation),icon=":material/account_circle:",use_container_width=True):
@@ -40,7 +40,7 @@ def header(reset_demo=None):
         brand,menu=st.columns([2.5,1],vertical_alignment="center")
         brand.html('<div class="brand"><span class="brand-symbol">↗</span>ParcelVerify<span class="brand-dot">.</span></div>')
         with menu.popover("Menu",key='mobile-menu-'+str(generation),icon=":material/menu:"):
-            for name in ("Home","Cases","Partners"):
+            for name in ("Home","Cases","Partners","Activity"):
                 st.button(name,key="mobile-nav-"+name,on_click=navigate,args=(name,),use_container_width=True)
             secondary_menu("mobile")
             if reset_demo:
@@ -54,7 +54,7 @@ def remember_role(prefix):
 def secondary_menu(prefix):
     role=context()[1]["role"]
     if prefix=="mobile":
-        st.radio("Act as (demo role)",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key=prefix+"-role",on_change=remember_role,args=(prefix,))
+        st.selectbox("Act as (demo role)",list(flow.ROLE_NAMES),index=list(flow.ROLE_NAMES).index(role),format_func=flow.ROLE_NAMES.get,key=prefix+"-role",on_change=remember_role,args=(prefix,))
     st.caption("Simulated identities show who may do which step.")
     for name in ("Settings","Help"):
         st.button(name,key=prefix+"-"+name,on_click=set_secondary,args=(name,),use_container_width=True)
@@ -296,7 +296,7 @@ def weight_evidence(case):
         with column:
             display_photo(photo["local_path"])
             st.caption("Demonstration image · "+stage_label(photo["event_type"])+" · "+format_time(photo["occurred_at"]))
-            if st.button("Enlarge photo",key="weight-enlarge-"+photo["photo_id"],icon=":material/zoom_in:"):work.enlarge(photo)
+            if not st.session_state.get("_in_dialog") and st.button("Enlarge photo",key="weight-enlarge-"+photo["photo_id"],icon=":material/zoom_in:"):work.enlarge(photo)
     return value
 
 def ask_here(case_id,node):
@@ -324,9 +324,13 @@ def map_panel(case,stations,selected,phase):
         b.button('Ask for a missing record' if node['missing'] else 'Ask partner to re-check here',key='ask-here-'+node['id'],on_click=ask_here,args=(case['case_id'],node),icon=':material/replay:',use_container_width=True)
     if not node['missing']:
         photos=rows('SELECT local_path FROM photos WHERE event_id=?',(node['id'],))
-        if photos:
-            with st.expander('Photo at this stop'):
-                for photo in photos[:2]:display_photo(photo['local_path'])
+        if photos and st.button('View photo at this stop',key='stop-photo-'+node['id'],icon=':material/image:',use_container_width=True):
+            stop_photos([photo['local_path'] for photo in photos[:2]])
+
+@st.dialog('Photo at this stop',width='large')
+def stop_photos(paths):
+    for path in paths:display_photo(path)
+    st.caption('Synthetic demo photo. The AI does not inspect photographs.')
 
 def quick_rule_check(case):
     """Display stored rule findings without deriving scores or re-running checks."""
@@ -363,22 +367,59 @@ def detail(case):
         st.title(heading)
         st.caption(case["shipment_id"]+" · Case "+case["case_id"][:6].upper()+" · "+explanation)
         st.html(flow.progress_html(phase))
-    if actor["role"]!="partner_user":
-        with st.container(key="ai-explanation"):
-            work.ai_summary(case)
+    # Order: parcel status -> the problem (stop + rule findings, left) beside a short AI summary (right)
+    # -> what to do next (bottom). The AI trace, evidence details and add-evidence form open in dialogs;
+    # the activity log has its own page.
+    st.session_state.activity_case=case["case_id"]
+    internal=actor["role"]!="partner_user"
     with st.container(key="case-work"):
-        where,step=st.columns([1,1.2],gap="large")
+        where,side=st.columns([1.25,1],gap="large") if internal else (st.container(),None)
         with where:
             with st.container(key="map-panel"):
+                if internal:
+                    with st.container(key="rule-panel"):
+                        quick_rule_check(case)
                 map_panel(case,stations,selected,phase)
-        with step:
-            with st.container(key="action-panel"):
-                st.html('<div id="review-actions"></div>')
-                if actor["role"]!="partner_user":
-                    quick_rule_check(case)
-                flow.next_step(case,stations,selected if selected!='hq' else None,concern=title)
-    st.html('<h2 class="section-title">More details</h2>')
-    with st.expander("Evidence and photos",expanded=case["issue_type"]=="access"):
+                with st.container(key="detail-buttons",horizontal=True):
+                    st.button("More details",key="show-details-"+case["case_id"],icon=":material/info:",
+                              on_click=flow.open_dialog,args=("details",case["case_id"]))
+                    if case["issue_type"]!="access" and actor["role"]!="approver":
+                        st.button("Add evidence",key="show-add-evidence-"+case["case_id"],icon=":material/add:",
+                                  on_click=flow.open_dialog,args=("add-evidence",case["case_id"]))
+        if side is not None:
+            with side:
+                with st.container(key="ai-explanation"):
+                    work.ai_brief(case)
+    with st.container(key="action-panel"):
+        st.html('<div id="review-actions"></div>')
+        flow.next_step(case,stations,selected if selected!='hq' else None,concern=title)
+    st.button("See this case's activity log",key="case-activity-link",icon=":material/history:",type="tertiary",
+              on_click=navigate,args=("Activity",))
+    if flow.dialog_is_open("details",case["case_id"]):
+        details_dialog(case,explanation)
+    elif flow.dialog_is_open("add-evidence",case["case_id"]):
+        add_evidence_dialog(case)
+
+
+@st.dialog("Add evidence",width="large",on_dismiss=flow.close_dialog)
+def add_evidence_dialog(case):
+    st.caption("Record a measurement, photo or note for "+case["shipment_id"]+". The original records stay unchanged.")
+    work.add_evidence(case["shipment_id"],in_dialog=True)
+
+
+@st.dialog("More details",width="large",on_dismiss=flow.close_dialog)
+def details_dialog(case,explanation):
+    # Photos can't open a second dialog from here, so their Enlarge buttons are hidden while this is open.
+    st.session_state["_in_dialog"]=True
+    try:
+        evidence_details(case,explanation)
+    finally:
+        st.session_state["_in_dialog"]=False
+
+
+def evidence_details(case,explanation):
+    path,actor=context()
+    if True:
         linked_evidence(case)
         if case["issue_type"]=="access":
             st.write("A partner account requested a shipment outside its recorded assignment. The access check denied the request; this does not establish intent.")
@@ -400,8 +441,6 @@ def detail(case):
             linked_evidence(case,details=True)
             with st.popover("All shipment checks and source records",use_container_width=True):
                 work.shipment_evidence(case["shipment_id"])
-    if case["issue_type"]!="access":work.add_evidence(case["shipment_id"])
-    work.activity(case)
     if actor["role"]!="partner_user":
         with st.expander("Technical evidence details"):
             st.caption("Issue source ID: "+case["case_id"])
@@ -454,7 +493,29 @@ def partners():
                 for case in sorted(related,key=lambda c:c["priority_score"] or 0,reverse=True)[:3]:issue_row(case)
                 st.button("View all partner issues",on_click=work.route,kwargs={"bucket":"all","partner":partner["partner_id"]})
 
-PAGES={"Home":home,"Cases":issues,"Partners":partners}
+def activity_page():
+    """Recorded decisions and requests, one case at a time (moved off the case page)."""
+    st.title("Activity")
+    st.caption("Every recorded request, decision and closure, kept per case. Records are never edited; later steps are added below earlier ones.")
+    cohort=work.cases()
+    if not cohort:
+        st.info("No cases are visible to this role yet.");return
+    recent=sorted(cohort,key=lambda c:c.get("updated_at") or "",reverse=True)
+    ids=[c["case_id"] for c in recent]
+    labels={c["case_id"]:c["shipment_id"]+" · "+issue_info(c)[0]+" · "+work.label(c) for c in recent}
+    wanted=st.session_state.get("activity_case")
+    if st.session_state.get("activity_case_widget") not in ids:
+        st.session_state.activity_case_widget=wanted if wanted in ids else ids[0]
+    with st.container(key="activity-picker"):
+        pick,open_col=st.columns([3,1],vertical_alignment="bottom")
+        chosen=pick.selectbox("Case",ids,format_func=labels.get,key="activity_case_widget")
+        open_col.button("Open this case",key="activity-open-case",icon=":material/arrow_forward:",
+                        on_click=work.route,kwargs={"case_id":chosen},use_container_width=True)
+    st.session_state.activity_case=chosen
+    work.activity(next(c for c in recent if c["case_id"]==chosen))
+
+
+PAGES={"Home":home,"Cases":issues,"Partners":partners,"Activity":activity_page}
 
 def restore_issue_scroll(view):
     # Only developer-authored JS; no record fields or user input enter this code.

@@ -278,3 +278,76 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
   .pv-progress::before,.pv-progress::after{top:7px;height:2px}
   .st-key-summary-strip .stat-card{min-height:120px;padding:14px 12px 44px}
 }
+
+/* Short AI summary on the case page; the full review opens in a dialog. */
+.ai-brief b{display:block;font-size:17px;margin:2px 0 4px}
+.ai-brief p{margin:0;color:var(--ink);font-size:14.5px;line-height:1.5}
+.st-key-ai-brief-actions{flex-wrap:wrap;gap:8px}
+.evidence-chip{display:inline-block;font:600 12px var(--font);background:var(--canvas);border:1px solid var(--line);border-radius:999px;padding:3px 9px;cursor:help}
+.st-key-ai-recommendation .evidence-chip{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:#fff}
+/* Closing a case early is a deliberate step: red, and it opens a confirmation dialog. */
+[class*="st-key-stop-waiting-"] button{background:var(--red);border-color:var(--red);color:#fff}
+[class*="st-key-stop-waiting-"] button:hover,[class*="st-key-stop-waiting-"] button:focus-visible{background:var(--red-ink);border-color:var(--red-ink);color:#fff}
+[class*="st-key-stop-waiting-"] button [data-testid="stMarkdownContainer"],[class*="st-key-stop-waiting-"] button span{color:#fff}
+[role="dialog"]>h2{padding:24px 56px 0 24px!important}
+/* Whole-card click targets: the button's element container covers the card (Streamlit 1.65 wraps .stButton). */
+[class*="st-key-stat-"]>.stElementContainer:has(.stButton),[class*="st-key-issue-row-"]>.stElementContainer:has(.stButton){position:absolute;inset:0;margin:0;z-index:3;height:auto!important}
+[class*="st-key-stat-"]>.stElementContainer:has(.stButton) .stButton,[class*="st-key-issue-row-"]>.stElementContainer:has(.stButton) .stButton{position:static;height:100%}
+[class*="st-key-stat-"]>.stElementContainer:has(.stButton) button,[class*="st-key-issue-row-"]>.stElementContainer:has(.stButton) button{height:100%;min-height:100%}
+/* Case page: sheet sits below the 3D map instead of overlapping it; problem cards, then AI, then the action. */
+.st-key-case-sheet{margin:22px 0 18px!important}
+.st-key-rule-panel{background:var(--card);border-radius:24px;padding:20px 22px;box-shadow:var(--shadow);height:100%}
+.st-key-case-work{margin-bottom:20px}
+.st-key-detail-buttons{gap:8px;flex-wrap:wrap;margin-top:6px}
+.st-key-action-panel{margin-bottom:20px}
+@media (max-width:640px){.st-key-case-sheet{margin:16px 0 14px!important}}
+.st-key-rule-panel{background:none!important;box-shadow:none!important;padding:0!important}
+/* Header role dropdown, aligned with the nav buttons. */
+.st-key-desktop-header [data-testid="stSelectbox"] [data-baseweb="select"]>div{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:999px;min-height:40px;color:#fff}
+.st-key-desktop-header [data-testid="stSelectbox"] [data-baseweb="select"] *{color:#fff;fill:#fff;font-weight:600;font-size:14px}
+.st-key-desktop-header [data-testid="stSelectbox"]{margin:0}
+/* Problem (left) beside a slim AI summary (right); the step card spans the bottom. */
+.st-key-case-work [data-testid="stColumn"]{min-width:0}
+.st-key-map-panel .st-key-rule-panel{margin:0 0 18px}
+.st-key-case-work .st-key-ai-explanation{margin-bottom:0;padding:18px 18px}
+.st-key-ai-explanation .st-key-ai-brief-actions button{padding-left:12px;padding-right:12px}
+@media (max-width:900px){
+  .st-key-case-work>[data-testid="stHorizontalBlock"]>[data-testid="stColumn"]:first-child,
+  .st-key-case-work>[data-testid="stHorizontalBlock"]>[data-testid="stColumn"]:last-child{order:0}
+}
+.st-key-desktop-role [data-baseweb="select"]>div{background:#2a2d2e!important;border:1px solid rgba(255,255,255,.18)!important;border-radius:999px!important;min-height:40px}
+.st-key-desktop-role [data-baseweb="select"] div,.st-key-desktop-role [data-baseweb="select"] span{color:#fff!important;font-weight:600}
+
+.st-key-desktop-role div:has(>input){background:transparent!important;border:1px solid rgb(58,61,63)!important;border-radius:999px!important;min-height:38px;height:38px;padding-left:10px;transition:background-color .15s ease}.st-key-desktop-role div:has(>input):hover{background:rgba(255,255,255,.08)!important}
+.st-key-desktop-role input{color:#fff!important;-webkit-text-fill-color:#fff!important;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer;text-align:center}
+.st-key-desktop-role button{background:transparent!important;color:#fff!important}.st-key-desktop-role button svg{color:#fff!important}
+/* Interaction feedback: buttons respond to hover and press, cards lift slightly, the current step pulses,
+   dialogs ease in and rule findings highlight under the pointer. All motion is off with reduced motion. */
+.stButton button,.stDownloadButton button,[data-testid="stPopover"] button{transition:transform .12s ease,box-shadow .15s ease,background-color .15s ease,border-color .15s ease}
+.stButton button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(23,25,26,.10)}
+.stButton button:active:not(:disabled){transform:translateY(0) scale(.97);box-shadow:none}
+.st-key-map-panel,.st-key-ai-explanation,.st-key-action-panel,.quick-rule-check{transition:box-shadow .2s ease,transform .2s ease}
+.st-key-map-panel:hover,.st-key-ai-explanation:hover,.st-key-action-panel:hover{box-shadow:0 14px 34px rgba(23,25,26,.10)}
+.quick-rule-check li{border-radius:10px;transition:background-color .15s ease;padding-left:6px;padding-right:6px}
+.quick-rule-check li:hover{background:rgba(255,255,255,.06)}
+.stage-facts li{transition:background-color .15s ease}
+.stage-facts li:hover{background:var(--yellow-soft)}
+.pv-progress li.current .dot{animation:pv-pulse 1.8s ease-out infinite}
+@keyframes pv-pulse{0%{box-shadow:0 0 0 0 rgba(245,197,66,.55)}70%{box-shadow:0 0 0 12px rgba(245,197,66,0)}100%{box-shadow:0 0 0 0 rgba(245,197,66,0)}}
+[role="dialog"]{animation:pv-dialog-in .18s ease-out}
+@keyframes pv-dialog-in{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+.st-key-ai-explanation [data-testid="stExpander"] details,.st-key-ai-explanation [data-testid="stStatusWidget"]{border-radius:14px}
+[class*="st-key-stop-waiting-"] button:hover:not(:disabled){box-shadow:0 8px 20px rgba(229,72,77,.30)}
+@media (prefers-reduced-motion:reduce){
+  .stButton button,.stDownloadButton button,.st-key-map-panel,.st-key-ai-explanation,.st-key-action-panel,.quick-rule-check li,.stage-facts li{transition:none}
+  .stButton button:hover:not(:disabled),.stButton button:active:not(:disabled){transform:none}
+  .pv-progress li.current .dot,[role="dialog"]{animation:none}
+}
+.st-key-map-panel .st-key-rule-panel{margin:0 0 6px!important}
+.st-key-map-panel .quick-rule-check{margin-bottom:0}
+.st-key-map-panel .st-key-rule-panel{margin:0 0 -4px!important}
+/* Act as: brand yellow so the demo role is easy to find. */
+.st-key-desktop-role div:has(>input){background:var(--yellow)!important;border-color:var(--yellow)!important}
+.st-key-desktop-role div:has(>input):hover{background:#f0b92e!important}
+.st-key-desktop-role input{color:var(--ink)!important;-webkit-text-fill-color:var(--ink)!important}
+.st-key-desktop-role button,.st-key-desktop-role button svg{color:var(--ink)!important}

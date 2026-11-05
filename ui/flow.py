@@ -63,7 +63,48 @@ def switch_role(role):
 
 def role_shortcut(role, why):
     st.info(why)
-    st.button('Switch to ' + ROLE_NAMES[role] + ' (demo)', key='switch-' + role, on_click=switch_role, args=(role,), icon=':material/swap_horiz:')
+    if st.button('Switch to ' + ROLE_NAMES[role] + ' (demo)', key='switch-' + role, on_click=switch_role, args=(role,), icon=':material/swap_horiz:'):
+        # Inside a dialog only the dialog reruns; rerun the whole app so the new role applies everywhere.
+        st.rerun()
+
+
+def open_dialog(name, case_id):
+    st.session_state.open_dialog = (name, case_id)
+
+
+def close_dialog():
+    st.session_state.pop('open_dialog', None)
+
+
+def dialog_is_open(name, case_id):
+    return st.session_state.get('open_dialog') == (name, case_id)
+
+
+@st.dialog('Stop waiting and close the case', on_dismiss=close_dialog)
+def stop_waiting_dialog(case, phase):
+    path, actor = context()
+    st.warning('The partner has not answered yet. Please read this before you close the case.')
+    st.markdown(
+        '- **The case is not verified.** Closing now leaves the missing facts unconfirmed. Choose *Close with open questions* unless every required record is present.\n'
+        '- **This is your decision.** It is saved with your role, your reason and the time, and it appears in the activity log. It is not deleted; the case can only be reopened.\n'
+        '- **No one is blamed.** A rule flag or a missing record needs review; it does not show that the partner or anyone else did something wrong. Do not write accusations in the reason.\n'
+        '- **The AI does not decide.** Any AI summary is advice only. Check the records yourself.\n'
+        '- **Not sure? Keep waiting.** Close this window and wait for the reply, or ask a supervisor first.')
+    finish_form(case, phase, compare_handoff(path, case['shipment_id']), path, actor)
+
+
+@st.dialog('Reopen this case', on_dismiss=close_dialog)
+def reopen_dialog(case):
+    path, actor = context()
+    reason = st.text_area('Why reopen this case?', key='reopen-reason')
+    if st.button('Reopen for follow-up', key='reopen', type='primary'):
+        try:
+            reopen_case(path, case['case_id'], actor, reason)
+        except ValueError as error:
+            st.error(str(error))
+            return
+        close_dialog()
+        st.rerun()
 
 
 def progress_html(phase):
@@ -117,14 +158,10 @@ def next_step(case, stations, selected, concern):
         if nxt:
             st.button('Go to the next case', key='next-case', type='primary', icon=':material/arrow_forward:', on_click=work.route, kwargs={'case_id': nxt}, use_container_width=True)
         if internal:
-            with st.expander('Reopen this case'):
-                reason = st.text_area('Why reopen this case?', key='reopen-reason')
-                if st.button('Reopen for follow-up', key='reopen'):
-                    try:
-                        reopen_case(path, case['case_id'], actor, reason)
-                        st.rerun()
-                    except ValueError as error:
-                        st.error(str(error))
+            st.button('Reopen this case', key='show-reopen-' + case['case_id'], icon=':material/undo:',
+                      on_click=open_dialog, args=('reopen', case['case_id']), use_container_width=True)
+            if dialog_is_open('reopen', case['case_id']):
+                reopen_dialog(case)
         return phase
 
     if phase in ('approve', 'send'):
@@ -182,8 +219,10 @@ def next_step(case, stations, selected, concern):
         else:
             role_shortcut('admin', 'Approved and sent. The partner (or an investigator) supplies the reply next. In this demo, switch back to Administrator to enter it.')
         if internal:
-            with st.expander('Stop waiting and close the case'):
-                finish_form(case, phase, compare_handoff(path, case['shipment_id']), path, actor)
+            st.button('Stop waiting and close the case', key='stop-waiting-' + case['case_id'], icon=':material/cancel:',
+                      on_click=open_dialog, args=('stop-waiting', case['case_id']), use_container_width=True)
+            if dialog_is_open('stop-waiting', case['case_id']):
+                stop_waiting_dialog(case, phase)
         return phase
 
     if phase == 'review':
@@ -313,6 +352,7 @@ def finish_form(case, phase, values, path, actor):
         except (ValueError, AuthorizationError) as error:
             st.error(friendly_close_error(str(error)))
             return
+        close_dialog()
         work.notice('Case closed. Nice work.')
         st.rerun()
 

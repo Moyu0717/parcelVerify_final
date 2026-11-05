@@ -57,6 +57,9 @@ def open_main(app):
 
 
 def finish(app, case_id, outcome, reason, confirm=True):
+    # While waiting for the partner, closing early opens a dialog first.
+    if not [r for r in app.radio if r.key == 'outcome-' + case_id] and [b for b in app.button if b.key == 'stop-waiting-' + case_id]:
+        app.button(key='stop-waiting-' + case_id).click().run()
     app.radio(key='outcome-' + case_id).set_value(outcome).run()
     app.text_area(key='finish-reason-' + case_id + '-' + outcome).set_value(reason)
     if confirm:
@@ -150,8 +153,13 @@ def test_verified_outcome_is_refused_while_a_task_is_open(app):
         assert conn.execute('SELECT COUNT(*) FROM finding_reviews').fetchone()[0] == 0
 
 
+def open_add_evidence(app):
+    keyed(app.button, 'show-add-evidence-').click().run()
+
+
 def test_evidence_validation_keeps_draft_and_converts_kg(app):
     open_main(app)
+    open_add_evidence(app)
     path = app.session_state.db_path
     with get_connection(path) as conn:
         original = conn.execute('SELECT COUNT(*) FROM events').fetchone()[0]
@@ -163,6 +171,7 @@ def test_evidence_validation_keeps_draft_and_converts_kg(app):
     assert widget(app.text_input, 'Weight (kg)').value == '1.85'
     app.button(key='back-to-cases').click().run()
     open_main(app)
+    open_add_evidence(app)
     assert widget(app.text_input, 'Weight (kg)').value == '1.85'
     assert widget(app.text_input, 'Quantity (packages)').value == 'not a count'
     with get_connection(path) as conn:

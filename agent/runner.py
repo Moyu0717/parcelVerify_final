@@ -763,7 +763,17 @@ def _check_proposal(conn, report, shipment_id, available, presented_findings=Non
     if not problem:
         matching = [f for f in dict.fromkeys(proposal['finding_ids'])
                     if (presented_findings or {}).get(f, {}).get('category') in ACTION_FINDINGS[proposal['action_type']]]
-        if not matching:problem = 'none of the named findings is the kind this request addresses'
+        if not matching:
+            problem = 'none of the named findings is the kind this request addresses'
+            # A missing record is asked for by the evidence task the rule check opened; a second
+            # request would duplicate it (PV-SHIP-021 live run, 2026-11-05). Not a failure: say so.
+            missing = [f for f in proposal['finding_ids'] if (presented_findings or {}).get(f, {}).get('category') == 'missing_evidence']
+            task = conn.execute("SELECT t.description FROM evidence_tasks t JOIN case_records c ON c.case_id=t.case_id "
+                                "WHERE c.shipment_id=? AND t.status IN ('open','received') ORDER BY t.created_at DESC LIMIT 1",
+                                (shipment_id,)).fetchone() if missing else None
+            if task:
+                problem = 'no new request needed: an open evidence task already covers the missing record'
+                if notes is not None:notes['proposal_covered_by_task'] = task[0] or 'Open evidence task'
         else:
             found = {}
             target = _resolve_target(conn, proposal, shipment_id, [presented_findings[f] for f in matching], found)

@@ -46,6 +46,7 @@ def route(destination="Cases", case_id=None, shipment_id=None, bucket=None, part
     st.session_state.route_pending = destination
     st.session_state.secondary_view = None
     st.session_state.selected_case_id = case_id
+    st.session_state.pop('open_dialog', None)
     st.session_state.selected_shipment_id = shipment_id
     if bucket:
         st.session_state.filter_bucket = bucket
@@ -53,6 +54,7 @@ def route(destination="Cases", case_id=None, shipment_id=None, bucket=None, part
         st.session_state.filter_partner = partner
 
 def back():
+    st.session_state.pop('open_dialog', None)
     st.session_state.selected_case_id = None
     st.session_state.selected_shipment_id = None
 
@@ -217,7 +219,7 @@ def shipment_evidence(shipment):
                 display_photo(photo["local_path"])
                 st.caption("Demonstration image · "+stage_label(photo["event_type"]))
                 st.caption(format_time(photo["occurred_at"]))
-                if st.button("Enlarge photo",key="enlarge-"+photo["photo_id"],icon=":material/zoom_in:"): enlarge(photo)
+                if not st.session_state.get("_in_dialog") and st.button("Enlarge photo",key="enlarge-"+photo["photo_id"],icon=":material/zoom_in:"): enlarge(photo)
     with st.expander("Source records"):
         for index,event in enumerate(source,1):
             st.write(f"**Evidence {index}: {stage_label(event['event_type'])}**")
@@ -247,42 +249,152 @@ def access_evidence(case):
         if not batches: st.caption("No shipment-specific approved batch work is recorded. Missing context is not proof of wrongdoing.")
         for event in batches: st.write("Approved batch work recorded · "+format_time(event["occurred_at"]))
 
-def ai_summary(case):
-    from services.ai_state import case_ai_state
-    path,actor=context()
-    if actor["role"]=="partner_user":return
-    state=case_ai_state(path,case["case_id"],actor)
-    report=state['report']
-    level=('success' if state['state']=='completed' else 'info' if state['state'] in
-           ('not_started','missing_configuration','config_disabled','running') else 'warning')
-    getattr(st,level)(state['message'])
-    if state['retry_at']:st.caption('Available after '+format_time(state['retry_at']))
-    if state['reference'] and state['state'] not in ('not_started','completed','outdated'):
-        st.caption('Review reference: '+state['reference'][-8:])
-    st.html('<p class="eyebrow">AI REVIEW AGENT</p><h3>Investigate this case</h3>')
-    st.caption('Read-only tools collect evidence with IDs. Server retrieval and AI selections are labelled separately. A person approves and sends any request.')
-    token=ai_request_token(case['case_id'])
-    if actor['role'] in ('admin','investigator') and st.button(state['action'],type='primary',disabled=not state['can_run'],key='ai-'+case['case_id']+'-'+token):
-        with st.spinner('Reviewing the available evidence…'):
-            run_case_ai(path,case['case_id'],actor,token)
-        st.rerun()
-    if state['state']=='running' and st.button('Refresh review status'):
-        st.rerun()
-    record=state['report_record'] if report else None
+VERDICTS={'consistent':'Evidence is consistent','requires_review':'Human review is needed','needs_review':'Human review is needed','insufficient_evidence':'More evidence is needed'}
+REQUEST_TYPES=('request_reweigh','request_rephoto','request_rescan')
+
+
+def _review_diagnostics(state):
+    """Diagnostics of the run that wrote the shown report (it can differ from the latest run)."""
+    record=state['report_record'] if state['report'] else None
     trace_run=record['run_id'] if record else state['reference']
     diagnostics=state['diagnostics']
     if trace_run and trace_run!=state['reference']:
         saved=rows('SELECT diagnostics_json FROM investigation_runs WHERE run_id=?',(trace_run,))
         try:diagnostics=json.loads(saved[0]['diagnostics_json'] or '{}') if saved else {}
         except (ValueError,TypeError):diagnostics={}
+    return trace_run,diagnostics or {}
+
+
+def _short_text(text,limit=180):
+    """First sentence of the AI summary, cut at a word boundary."""
+    text=(text or '').strip()
+    first=text.split('. ')[0].rstrip('.')+'.' if text else ''
+    if len(first)>limit:first=first[:limit].rsplit(' ',1)[0]+'…'
+    return first
+
+
+def apply_suggestion(case_id,action_type,target):
+    """Prefill the human request form only. A person sends it and a supervisor approves it."""
+    from ui import flow
+    st.session_state['choice-'+case_id]=flow.ASK
+    st.session_state['request-type-'+case_id]=action_type
+    if target:st.session_state.setdefault('scene_selection',{})[case_id]=target
+    notice('Suggestion applied to the request form: '+flow.FRIENDLY.get(action_type,action_type)+'. Check the message and press Send request. A supervisor approves it before anything reaches the partner.','info')
+
+
+def open_ai_details(case_id):
+    st.session_state.open_dialog=('ai-details',case_id)
+
+
+def close_dialog():
+    st.session_state.pop('open_dialog',None)
+
+
+@st.dialog('AI review details',width='large',on_dismiss=close_dialog)
+def ai_details_dialog(case):
+    ai_details(case)
+
+
+def run_ai_with_status(path,case_id,actor,token,label):
+    """Show what the review is doing while it runs, then a short result toast."""
+    with st.status(label+'…',expanded=True) as box:
+        st.write('Reading the case findings and linked records. Read-only: nothing is changed or sent.')
+        result=run_case_ai(path,case_id,actor,token)
+        ok=result.get('status')=='completed'
+        if ok:st.write('Report written and checked against the retrieved evidence.')
+        box.update(label='AI review finished' if ok else 'AI review stopped',state='complete' if ok else 'error',expanded=False)
+    notice('AI review finished. Read the short summary, then decide yourself.' if ok else 'The AI review stopped. You can still review the case manually.','success' if ok else 'warning')
+    return result
+
+
+def ai_brief(case):
+    """Short plain-language AI summary on the case page; the full trace opens in a dialog."""
+    from services.ai_state import case_ai_state
+    from ui import flow
+    path,actor=context()
+    if actor["role"]=="partner_user":return
+    state=case_ai_state(path,case["case_id"],actor)
+    report=state['report']
+    can_start=actor['role'] in ('admin','investigator')
+    token=ai_request_token(case['case_id'])
+    attempted=st.session_state.setdefault('auto_ai_attempted',[])
+    if (st.session_state.get('auto_ai_review') and can_start and state['can_run'] and state['state']=='not_started'
+            and case['case_id'] not in attempted):
+        # Settings → "Run AI review automatically": once per case per visit, never a retry loop.
+        attempted.append(case['case_id'])
+        run_ai_with_status(path,case['case_id'],actor,token,'Running the AI review automatically')
+        st.rerun()
+    st.html('<p class="eyebrow">AI REVIEW</p>')
+    level=('success' if state['state']=='completed' else 'info' if state['state'] in
+           ('not_started','missing_configuration','config_disabled','running') else 'warning')
+    getattr(st,level)(state['message'])
+    if state['retry_at']:st.caption('Available after '+format_time(state['retry_at']))
+    trace_run,diagnostics=_review_diagnostics(state)
+    suggestion=None
+    if report:
+        st.html('<div class="ai-brief"><b>'+escape(VERDICTS.get(report['verdict'],'Human review is needed'))+'</b>'
+                '<p>'+escape(_short_text(report.get('summary')))+'</p></div>')
+        tasks,actions=flow.load(case)
+        phase=flow.phase_of(case,tasks,actions)
+        proposal=report.get('proposed_action')
+        from agent.runner import agent_proposal_status
+        stored=agent_proposal_status(path,case['case_id'],proposal) if proposal else None
+        action_type=(proposal or {}).get('action_type') or report.get('recommended_action')
+        label=flow.FRIENDLY.get(action_type) if action_type in REQUEST_TYPES else None
+        if stored:
+            st.caption('AI suggestion: '+(label or ACTION_LABELS.get(action_type,action_type))+'. '+PROPOSAL_STATUS.get(stored['status'],stored['status'])+'.')
+        elif diagnostics.get('proposal_covered_by_task'):
+            st.caption('AI suggestion: no new request needed. This case already has an open task: '+diagnostics['proposal_covered_by_task']+'.')
+        elif label and phase=='check' and can_start and (state['report_outdated'] or state['previous_report']):
+            st.caption('AI suggestion: '+label+'. This review is older than the current records, so run a new review before applying it.')
+        elif label and phase=='check' and can_start:
+            st.caption('AI suggestion: '+label+'. Applying it fills in the request form; you send it and a supervisor approves it.')
+            suggestion=(action_type,(proposal or {}).get('source_event_id'))
+        elif label:
+            st.caption('AI suggestion: '+label+'. A request is already in progress, so nothing new is needed now.')
+    elif state['state']=='not_started':
+        st.caption('Optional. The AI reads the case records and suggests a next step; a person decides.')
+    with st.container(key='ai-brief-actions',horizontal=True):
+        if can_start and st.button(state['action'],type='secondary' if suggestion else 'primary',disabled=not state['can_run'],key='ai-'+case['case_id']+'-'+token):
+            run_ai_with_status(path,case['case_id'],actor,token,'Reviewing the case records')
+            st.rerun()
+        if state['state']=='running' and st.button('Refresh review status'):
+            st.rerun()
+        if suggestion:
+            st.button('Apply suggestion',type='primary',key='apply-suggestion-'+case['case_id'],icon=':material/edit_note:',
+                      on_click=apply_suggestion,args=(case['case_id'],)+suggestion,
+                      help='Fills in the request form. Nothing is sent until you press Send request and a supervisor approves it.')
+        if trace_run or report or actor['role']=='admin':
+            st.button('See full AI review',key='ai-details-'+case['case_id'],icon=':material/manage_search:',
+                      on_click=open_ai_details,args=(case['case_id'],))
+    if st.session_state.get('open_dialog')==('ai-details',case['case_id']):
+        ai_details_dialog(case)
+
+
+def ai_details(case):
+    """Full AI review: labelled trace, proposal check and recommendation. Shown inside a dialog."""
+    from services.ai_state import case_ai_state
+    path,actor=context()
+    if actor["role"]=="partner_user":return
+    state=case_ai_state(path,case["case_id"],actor)
+    report=state['report']
+    if state['reference'] and state['state'] not in ('not_started','completed','outdated'):
+        st.caption('Review reference: '+state['reference'][-8:])
+    st.caption('Read-only tools collect evidence with IDs. Server retrieval and AI selections are labelled separately. A person approves and sends any request. Hover an evidence ID to see its full reference; open records from the case page.')
+    record=state['report_record'] if report else None
+    trace_run,diagnostics=_review_diagnostics(state)
+    if not (trace_run or report):st.caption('No AI review has been saved for this case yet.')
     if trace_run or report:
         with st.container(key='ai-agent-grid'):
             trace_column,recommendation_column=st.columns(2,gap='medium')
             with trace_column:
-                if trace_run:agent_trace(trace_run,diagnostics)
-                if diagnostics.get('proposal_dropped'):
-                    st.html('<div class="proposal-check">Proposal checked against retrieved findings: failed</div>')
-                    st.caption(diagnostics['proposal_dropped'])
+                if trace_run:agent_trace(trace_run,diagnostics,interactive=False)
+                if diagnostics.get('proposal_covered_by_task'):
+                    st.html('<div class="proposal-check">Proposal check: no new request needed</div>')
+                    st.caption('The AI suggested a request for a missing record, but this case already has an open task for it: '+diagnostics['proposal_covered_by_task']+'. Nothing was filed twice.')
+                elif diagnostics.get('proposal_dropped'):
+                    st.html('<div class="proposal-check">Proposal check: not filed</div>')
+                    st.caption('The AI suggestion did not match a finding it was shown, so the server did not file it. Reason: '+diagnostics['proposal_dropped']+'.')
                 elif report and report.get('proposed_action'):
                     st.html('<div class="proposal-check">Proposal checked against retrieved findings: passed</div>')
                 else:st.caption('No proposal-check result recorded.')
@@ -303,26 +415,33 @@ def ai_summary(case):
             if trace:st.json(trace)
 
 
-def agent_recommendation(path,case,report,actor,state):
+def evidence_chips(ids,key,interactive=True):
+    """Evidence ID chips. Inside a dialog they are labels only: Streamlit cannot open a dialog from a dialog."""
     from ui.case_workflow import source_label,source_view
+    with st.container(key=key):
+        for identifier in dict.fromkeys(ids):
+            if not interactive:
+                st.html('<span class="evidence-chip" title="'+escape(source_label(identifier)+' · '+identifier)+'">'+escape(identifier[:8])+'</span>')
+            elif st.button(identifier[:8],key=key+'-'+identifier,help=source_label(identifier)+' · '+identifier):
+                source_view(identifier)
+
+
+def agent_recommendation(path,case,report,actor,state,interactive=False):
     with st.container(key='ai-recommendation'):
-        verdict={'consistent':'Evidence is consistent','requires_review':'Human review is needed','needs_review':'Human review is needed','insufficient_evidence':'More evidence is needed'}[report['verdict']]
+        verdict=VERDICTS.get(report['verdict'],'Human review is needed')
         st.html('<div class="recommendation-top"><span>AI recommendation</span><b>'+escape(verdict)+'</b></div>')
         st.write(report['summary'])
         st.markdown('**Retrieved evidence behind each fact**')
         for fact_index,fact in enumerate(report['facts']):
             st.write('• '+fact['text'])
-            with st.container(key='ai-fact-chips-'+str(fact_index)):
-                for identifier in dict.fromkeys(fact['evidence_ids']):
-                    if st.button(identifier[:8],key='report-source-'+str(fact_index)+'-'+identifier,help=source_label(identifier)+' · '+identifier):
-                        source_view(identifier)
+            evidence_chips(fact['evidence_ids'],'ai-fact-chips-'+str(fact_index),interactive)
         st.markdown('**Possible legitimate explanations**')
         for item in report.get('alternative_explanations') or []:st.write('• '+item)
         if not report.get('alternative_explanations'):st.caption('None recorded in this review.')
         st.markdown('**What is missing**')
         for item in report['missing_evidence']:st.write('• '+item)
         if not report['missing_evidence']:st.caption('No missing evidence listed in this review.')
-        agent_proposal_card(path,case,report,actor,allow_prefill=not state['report_outdated'] and not state['previous_report'])
+        agent_proposal_card(path,case,report,actor,interactive)
         st.caption(report.get('limitations') or 'Text records only. AI does not inspect photographs or approve actions.')
 
 
@@ -330,11 +449,10 @@ PROPOSAL_STATUS={'proposed':'AI proposed · waiting for a supervisor','approved'
  'executed':'Approved and sent','rejected':'Rejected by a supervisor','expired':'Expired'}
 
 
-def agent_proposal_card(path,case,report,actor,allow_prefill=True):
-    """Show stored status truthfully; using a suggestion only prefills the human form."""
+def agent_proposal_card(path,case,report,actor,interactive=False):
+    """Show stored status truthfully. Apply suggestion (case page) only prefills the human form."""
     from agent.runner import agent_proposal_status,AGENT_PROPOSABLE_ACTIONS
-    from ui.case_workflow import source_label,source_view
-    from ui import flow
+    from ui.case_workflow import source_label
     proposal=report.get('proposed_action')
     stored=agent_proposal_status(path,case['case_id'],proposal) if proposal else None
     st.markdown('**Proposed next step**' if stored else '**Suggested next step (not filed)**')
@@ -349,16 +467,8 @@ def agent_proposal_card(path,case,report,actor,allow_prefill=True):
     st.write(ACTION_LABELS.get(proposal['action_type'],proposal['action_type'])+' · for '+source_label(proposal['source_event_id']))
     st.write('AI reasoning (not sent): '+proposal['reason'])
     if proposal.get('draft_message'):st.write('Message to the partner (fixed wording): '+proposal['draft_message'])
-    with st.container(key='ai-proposal-chips'):
-        for identifier in dict.fromkeys(proposal['evidence_ids']):
-            if st.button(identifier[:8],key='proposal-source-'+identifier,help=source_label(identifier)+' · '+identifier):source_view(identifier)
-    st.caption('A person must approve and send the request. Using this proposal only preselects the Step 1 form.')
-    tasks,actions=flow.load(case)
-    if (not stored and actor['role'] in ('admin','investigator') and flow.phase_of(case,tasks,actions)=='check'
-            and proposal['action_type'] in AGENT_PROPOSABLE_ACTIONS):
-        if st.button('Use this proposal',key='agent-proposal-'+case['case_id'],disabled=not allow_prefill):
-            st.session_state['choice-'+case['case_id']]=flow.ASK
-            st.session_state['request-type-'+case['case_id']]=proposal['action_type']
+    evidence_chips(proposal['evidence_ids'],'ai-proposal-chips',interactive)
+    st.caption('A person must approve and send the request. Apply suggestion on the case page only fills in the request form.')
 
 
 TOOL_PURPOSE={'get_case_context':'Read the case findings and linked handoffs','get_shipment_timeline':'Read every recorded stop and photo ID',
@@ -366,9 +476,8 @@ TOOL_PURPOSE={'get_case_context':'Read the case findings and linked handoffs','g
  'check_access_scope':'Read access-permission findings','get_context_events':'Look for approved repackaging or batch work',
  'get_vendor_context':'Read the partner contract','get_partner_metrics':'Read partner evidence metrics (context only)'}
 
-def agent_trace(run_id,diagnostics=None):
+def agent_trace(run_id,diagnostics=None,interactive=False):
     """Number persisted tool selections and distinguish server work from AI choices."""
-    from ui.case_workflow import source_label,source_view
     trace=rows('SELECT tool_exec_id,tool_name,parameters_json,result_summary,evidence_ids_json,source,duration_ms FROM tool_executions WHERE run_id=? ORDER BY created_at,rowid',(run_id,))
     diagnostics=diagnostics or {}
     with st.container(key='ai-agent-trace'):
@@ -387,10 +496,7 @@ def agent_trace(run_id,diagnostics=None):
                 st.write(tool['result_summary'] or TOOL_PURPOSE.get(tool['tool_name'],'Read-only record lookup'))
                 if tool['tool_name'] in diagnostics.get('withheld_tools',[]):
                     st.html('<div class="trace-withheld">result too large, withheld from AI</div>')
-                with st.container(key='ai-trace-chips-'+tool['tool_exec_id']):
-                    for identifier in dict.fromkeys(ids):
-                        if st.button(identifier[:8],key='trace-source-'+tool['tool_exec_id']+'-'+identifier,help=source_label(identifier)+' · '+identifier):
-                            source_view(identifier)
+                evidence_chips(ids,'ai-trace-chips-'+tool['tool_exec_id'],interactive)
         for name in diagnostics.get('withheld_tools',[]):
             if not any(tool['tool_name']==name for tool in trace):
                 st.caption(name+' · result too large, withheld from AI')
@@ -542,10 +648,11 @@ def activity(case):
                 st.json(complete)
                 st.download_button("Download audit record",json.dumps(complete,indent=2),file_name="parcelverify-audit.json")
 
-def add_evidence(shipment):
+def add_evidence(shipment,in_dialog=False):
+    import contextlib
     path,actor=context()
     if actor["role"]=="approver": return
-    with st.expander("Add evidence"):
+    with (contextlib.nullcontext() if in_dialog else st.expander("Add evidence")):
         stages=["handoff_submitted","pod_submitted","dispatch_confirmed","collection_submitted","warehouse_transfer","transit_update"]
         stage=st.selectbox("Recorded stage",stages,format_func=stage_label,key="stage-"+shipment)
         with st.container():
@@ -586,6 +693,7 @@ def add_evidence(shipment):
                     if value.strip(): payload[key]=value.strip()
                 occurred=datetime.combine(date,time,tzinfo=MYT).astimezone(timezone.utc).isoformat()
                 result=submit_handoff(path,actor,shipment,stage,payload,occurred,photo.getvalue() if photo else None,source="manual_evidence")
+                st.session_state.pop("open_dialog",None)
                 notice("Evidence saved and checked." if result["event"]["is_new"] else "This evidence was already saved. No duplicate was added.")
                 if result["case"]: route(case_id=result["case"]["case_id"])
                 st.rerun()
@@ -605,7 +713,7 @@ def detail(case):
             value=compare_handoff(context()[0],case["shipment_id"])
             missing=[MISSING_LABELS.get(key,humanize(key)) for key in value["unknowns"]]
             if missing: st.caption("Still to confirm: "+"; ".join(missing[:3])+".")
-        with st.expander("AI summary"): ai_summary(case)
+        ai_brief(case)
         next_step(case)
     with evidence:
         if case["issue_type"]=="access":

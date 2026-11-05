@@ -24,6 +24,9 @@ def request_search():
 def remember_role():
     st.session_state.actor_role=st.session_state.role_widget
 
+def remember_auto_ai():
+    st.session_state.auto_ai_review=st.session_state.auto_ai_widget
+
 def remember_partner():
     st.session_state.actor_partner=st.session_state.partner_identity_widget
 
@@ -44,6 +47,11 @@ def settings():
     importlib.reload(runtime_identity)
     from release_info import build_information, dataset_version, DATASET_VERSION, ai_configuration
     active_dataset = dataset_version(st.session_state.db_path)
+    st.subheader("AI review")
+    st.toggle("Run the AI review automatically when I open a case",value=st.session_state.get("auto_ai_review",False),
+              key="auto_ai_widget",on_change=remember_auto_ai)
+    st.caption("Off by default. When on, one AI review runs the first time an investigator or administrator opens a case that has no review yet. "
+               "It never retries on its own, it uses the shared Groq quota, and a person still approves every request.")
     with st.expander("Build information"):
         st.caption("Release and commit identify the source checkout. Loaded-function verification below checks the active process separately.")
         for label, value in build_information().items(): st.write(f"{label}: {value}")
@@ -148,7 +156,10 @@ def main():
         st.session_state.primary_destination="Home"
     header(reset_demo=new_workspace)
     message=st.session_state.pop("notice",None)
-    if message: getattr(st,message[0])(message[1])
+    if message:
+        getattr(st,message[0])(message[1])
+        # A short pop-up as well, so the result is noticed even when the page is scrolled.
+        st.toast(message[1].split('. ')[0].rstrip('.')+'.',icon={'success':':material/check_circle:','error':':material/error:','warning':':material/warning:'}.get(message[0],':material/info:'))
     try:
         view=st.session_state.get("secondary_view")
         if view=="Settings": settings()

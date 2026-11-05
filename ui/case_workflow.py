@@ -94,7 +94,7 @@ def photo_comparison(case):
             with col:
                 display_photo(photo['local_path']);st.write('**'+photo['shipment_id']+'**')
                 st.caption(stage_label(photo['event_type'])+' · '+format_time(photo['occurred_at'])+' · '+humanize(photo['source']))
-                if st.button('Enlarge photo',key='linked-enlarge-'+pid,icon=':material/zoom_in:'):
+                if not st.session_state.get('_in_dialog') and st.button('Enlarge photo',key='linked-enlarge-'+pid,icon=':material/zoom_in:'):
                     from ui.workspace_ui import enlarge
                     enlarge(photo)
         if matches:
