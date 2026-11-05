@@ -334,12 +334,15 @@ def stop_photos(paths):
 
 def quick_rule_check(case):
     """Display stored rule findings without deriving scores or re-running checks."""
-    items=[]
+    items=[];seen=set()
     for finding in case['findings']:
         description=finding.get('description') or 'No description recorded.'
         sentence, separator, _=description.partition('. ')
         if separator:sentence+='.'
         score=finding.get('score')
+        key=(finding.get('category'),sentence,score)
+        if key in seen:continue
+        seen.add(key)
         items.append('<li><div><b>'+esc(humanize(finding.get('category')))+'</b><p>'+esc(sentence)+'</p></div>'
                      +('<span class="rule-score">'+esc('Score: '+str(score))+'</span>' if score is not None else '')+'</li>')
     st.html('<section class="quick-rule-check" aria-label="Quick rule check"><div class="rule-check-head"><h3>Quick rule check</h3><span>Fixed rules</span></div>'
