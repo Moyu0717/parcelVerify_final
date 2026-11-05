@@ -1,6 +1,5 @@
 """
 ParcelVerify — Actions & Audit Service Tests
-Owner: Role D (Application Agent)
 
 Tests for services/actions.py and services/audit.py using isolated temp databases.
 Never writes to the demo database (D-017).

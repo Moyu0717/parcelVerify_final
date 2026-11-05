@@ -1,5 +1,5 @@
 """Novice entry must use permitted queue data; the single next step must not skip approval."""
-from tests.test_ui_refactor import app,healthy
+from tests.test_review_ui import app,healthy
 from ui.flow import phase_of, STEP_OF
 from ui.scene3d import ordered_stations, van_target
 from services.cases import list_cases

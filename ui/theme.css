@@ -163,8 +163,7 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
   .st-key-ai-agent-grid [data-testid="stColumn"]{width:100%!important;min-width:100%!important;flex:1 1 100%!important}
 }
 
-/* Step 1: reference typography, visible desktop role control and hint strip.
-   Keep the existing theme handling; do not force a browser colour scheme. */
+/* Typography, desktop role control and hint strip. The browser colour scheme is not forced. */
 .stApp button,.stApp input,.stApp textarea{font-family:var(--font)}
 .st-key-desktop-header [data-testid="stHorizontalBlock"]{flex-wrap:nowrap;gap:8px}
 .st-key-desktop-header [data-testid="stColumn"]{min-width:0!important}
@@ -201,7 +200,7 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
   .st-key-desktop-header .demo-tag{display:none}
 }
 
-/* Step 3: stored findings, proof choices and recorded activity. */
+/* Stored findings, proof choices and recorded activity. */
 .quick-rule-check{background:linear-gradient(135deg,var(--black),#2b2f31);color:#fff;border-radius:18px;padding:16px;margin-bottom:18px;overflow-wrap:anywhere}
 .rule-check-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .rule-check-head h3{color:var(--yellow);font-size:15px!important;margin:0!important}
@@ -231,7 +230,7 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
 }
 @media(prefers-reduced-motion:reduce){.st-key-proof-request-form [role="radiogroup"] label{transition:none}}
 
-/* Step 4: home overview, using the same authorized case queue as Cases. */
+/* Home overview, using the same authorized case queue as Cases. */
 .st-key-next-card{background:var(--card);border-radius:20px;padding:16px 18px;box-shadow:var(--shadow);gap:12px}
 .st-key-next-card .next-card{background:transparent;border-radius:0;padding:0;box-shadow:none;margin:0;gap:4px;overflow-wrap:anywhere}
 .st-key-next-card .tag{text-transform:uppercase}

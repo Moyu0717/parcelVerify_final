@@ -1,6 +1,5 @@
 """
 ParcelVerify — Agent Tools
-Owner: Role C (Investigation Agent)
 
 Provides:
 - dispatch_tool(): Validate tool name, params, case scope, and actor permissions

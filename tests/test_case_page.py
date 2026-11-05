@@ -1,5 +1,5 @@
 """Actual widgets: a partner reply with an ambiguous time is refused without losing the draft."""
-from tests.test_ui_refactor import app,open_main,widget,healthy,keyed,approve_as_supervisor
+from tests.test_review_ui import app,open_main,widget,healthy,keyed,approve_as_supervisor
 from db import get_connection
 
 def test_partner_reply_requires_timezone_and_keeps_draft(app):

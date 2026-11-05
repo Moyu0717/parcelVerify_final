@@ -1,4 +1,4 @@
-"""Reference-led presentation over the existing authorized review services."""
+"""Main page layout and navigation over the authorized review services."""
 import json
 from datetime import datetime, timezone
 from html import escape as esc

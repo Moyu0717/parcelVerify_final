@@ -1,4 +1,4 @@
-"""S02 minimal: the agent may file one validated, deduplicated request; it can never approve it."""
+"""The agent may file one validated, deduplicated request; it can never approve it."""
 import pytest
 from contracts import AuthorizationError, InvestigationReport
 from db import get_connection

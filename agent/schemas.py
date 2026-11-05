@@ -1,6 +1,5 @@
 """
 ParcelVerify — Agent Schemas
-Owner: Role C (Investigation Agent)
 
 Pydantic models for the investigation report structure.
 These are used by the runner to validate model output.

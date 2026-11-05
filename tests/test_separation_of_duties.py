@@ -1,4 +1,4 @@
-"""S04: the proposer cannot approve, decisions need a reason, and the agent identity can only propose."""
+"""The proposer cannot approve, decisions need a reason, and the agent identity can only propose."""
 import pytest
 from contracts import AuthorizationError
 from db import get_connection

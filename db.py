@@ -1,6 +1,5 @@
 """
 ParcelVerify - Database Layer
-Owner: Role A (Data Agent)
 
 Provides:
 - init_db(): Create/migrate database from schema.sql (idempotent)

@@ -1,5 +1,4 @@
 -- ParcelVerify Schema v1.1
--- Owner: Main Agent
 -- All times: UTC ISO 8601. Weight: grams (g). PRAGMA foreign_keys = ON on every connection.
 
 PRAGMA foreign_keys = ON;

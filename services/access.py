@@ -1,6 +1,5 @@
 """
 ParcelVerify — Access Service (Gate 1)
-Owner: Role B (Evidence Agent)
 
 Provides:
 - query_shipment(): Authorization check + access logging

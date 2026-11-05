@@ -1,4 +1,4 @@
-"""S05: access-pattern detection is not limited to two hard-coded shipments and runs even when cases exist."""
+"""Access-pattern detection is not limited to two hard-coded shipments and runs even when cases exist."""
 import json
 from datetime import datetime, timedelta, timezone
 from db import get_connection

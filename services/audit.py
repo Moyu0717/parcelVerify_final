@@ -1,6 +1,5 @@
 """
 ParcelVerify — Audit Service
-Owner: Role D (Application Agent)
 
 Provides:
 - append_audit(): Append audit event (transactional — D-015)

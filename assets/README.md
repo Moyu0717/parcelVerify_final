@@ -1,11 +1,3 @@
-# Decorative logistics asset
+# Images
 
-`synthetic-parcel.png` is a separate generated, unbranded parcel-on-scale illustration used only to construct labelled synthetic evidence fixtures. It was created with the built-in imagegen tool on 14 October 2026. Prompt: “A plain medium cardboard parcel on a digital warehouse weighing scale, green tamper tape, neutral warehouse workbench, realistic documentary viewpoint and lighting; no people, personal data, brands or readable numbers; synthetic illustration, not a verified real parcel.” `demo_fixtures.py` performs the brief-authorized controlled variants and labels them synthetic. Case A reuses the exact original file bytes on PV-SHIP-010. Case B has a 0.98-brightness controlled near variant with different bytes. Record measurements are authoritative; these images do not prove contents or weight.
-
-`logistics-hero.png` was generated with the built-in imagegen tool on 13 October 2026 for ParcelVerify. It is a decorative, unbranded editorial image. It is stored locally and is only used on Home; it is never loaded into shipment evidence, case records or investigations. Product copy identifies it as illustrative and AI generated. The GREENWAY screenshot guided composition and was not copied into the app.
-
-Final prompt:
-
-> Create a photorealistic editorial logistics photograph for the home page of a professional shipment evidence review application. Landscape 3:2 composition. A single modern deep emerald green delivery truck with an unbranded white box trailer, three-quarter side view, parked beside a bright contemporary logistics warehouse loading area. Natural soft morning light, restrained warm concrete and white architecture, muted blue sky, rich green cab. Clean premium commercial photography, believable truck proportions, thoughtful negative space, intentional crop, no people needed, no words, no logos, no watermark, no interface. This is a decorative brand image, not evidence of a real shipment. Save as a project asset if supported.
-
-Headings request Manrope and body text Inter, with Segoe UI / Arial system fallbacks. No remote font or photo request is required for the app to work. On this Windows QA machine the available coherent system fallback is used.
+`logistics-hero.png` and `synthetic-parcel.png` are AI-generated, unbranded illustrations. The hero image is decorative. `demo_fixtures.py` uses the parcel image to build the labelled synthetic evidence photos for the demo cases. Neither image shows a real shipment, and the app never treats them as proof of a parcel's contents or weight.

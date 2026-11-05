@@ -1,6 +1,5 @@
 """
 ParcelVerify - Synthetic Data Seeder
-Owner: Role A (Data Agent)
 
 Generates reproducible synthetic data for the ParcelVerify prototype:
 - 3 partners (P-QUICKRUN, P-SAFELOG, P-METROLINE)

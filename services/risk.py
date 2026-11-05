@@ -1,6 +1,5 @@
 """
 ParcelVerify — Risk Service
-Owner: Role B (Evidence Agent)
 
 Provides:
 - calculate_priority(): Return total score and per-item scores; deduplicate by category

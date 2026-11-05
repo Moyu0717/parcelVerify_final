@@ -1,6 +1,5 @@
 """
 ParcelVerify — Agent Package
-Owner: Role C (Investigation Agent)
 
 Sub-modules:
 - tools.py: 7 read-only tools for investigation

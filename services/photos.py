@@ -1,6 +1,5 @@
 """
 ParcelVerify — Photo Service
-Owner: Role B (Evidence Agent)
 
 Provides:
 - inspect_photo(): Return same-file / similar candidates and authorized evidence

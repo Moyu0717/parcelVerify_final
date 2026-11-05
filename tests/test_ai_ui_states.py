@@ -1,5 +1,5 @@
 """Real widgets with mocked AI; case and Settings must agree."""
-from tests.test_ui_refactor import app,open_main,widget,healthy
+from tests.test_review_ui import app,open_main,widget,healthy
 from tests.test_agent import ScriptedProvider,valid_report
 from agent.runner import investigate_case
 

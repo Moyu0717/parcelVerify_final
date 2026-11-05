@@ -6,6 +6,4 @@ data
 reports
 .env*
 .streamlit/secrets.toml
-.workbuddy-ai
 dist
-reference

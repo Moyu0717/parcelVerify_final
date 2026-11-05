@@ -1,10 +1,8 @@
 """
 ParcelVerify — Shared Contracts, Schemas, and Configuration
-Owner: Main Agent
-Version: 1.1 (2026-10-12)
 
 This module defines all shared types, enums, Pydantic models, and the database
-configuration mechanism. Sub-agents import from here but must not modify this file.
+configuration mechanism used across the app.
 """
 
 from __future__ import annotations

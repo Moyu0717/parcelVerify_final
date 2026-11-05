@@ -4,7 +4,7 @@ from agent.runner import _check_proposal, investigate_case
 from services.cases import get_case_context, list_cases
 from tests.test_agent import ScriptedProvider, valid_report
 from tests.test_case_completion import demo, ADMIN
-from tests.test_ui_refactor import app, open_main, widget, healthy, approve_as_supervisor
+from tests.test_review_ui import app, open_main, widget, healthy, approve_as_supervisor
 
 
 def test_missing_weight_reweigh_is_reported_as_covered_by_the_open_task(demo):

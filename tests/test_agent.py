@@ -1,6 +1,5 @@
 """
 ParcelVerify — Agent Tests (Mock Model)
-Owner: Role C (Investigation Agent)
 
 Tests for agent/tools.py and agent/runner.py using mock model.
 Track B (Mock Model Tests) — NOT conflated with real model tests.

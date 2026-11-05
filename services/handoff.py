@@ -1,6 +1,5 @@
 """
 ParcelVerify — Handoff Service (Gate 2)
-Owner: Role B (Evidence Agent)
 
 Provides:
 - evaluate_handoff(): Rule results, contradictions, missing evidence

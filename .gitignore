@@ -8,7 +8,6 @@ reports/
 .env.*
 !.env.example
 .streamlit/secrets.toml
-.workbuddy-ai/
 dist/
 qa/artifacts/
 # Generated deterministic synthetic evidence is reconstructed from the local

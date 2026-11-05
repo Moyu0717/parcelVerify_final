@@ -1,6 +1,5 @@
 """
 ParcelVerify — Rules Service Tests
-Owner: Role B (Evidence Agent)
 
 Tests for services/access.py, services/handoff.py, services/photos.py,
 and services/risk.py using isolated temp databases.

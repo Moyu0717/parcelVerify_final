@@ -1,6 +1,5 @@
 """
 ParcelVerify — Actions Service
-Owner: Role D (Application Agent)
 
 Provides:
 - propose_action(): Create a pending approval request (does not execute)

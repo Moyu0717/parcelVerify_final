@@ -1,4 +1,4 @@
-"""S06 (conservative): a package-count difference always needs review; text mentioning 'scan' is not proof."""
+"""A package-count difference always needs review; text mentioning 'scan' is not proof."""
 import json
 from datetime import datetime, timezone
 from db import get_connection

@@ -1,6 +1,5 @@
 """
 ParcelVerify — Data Layer Tests
-Owner: Role A (Data Agent)
 
 Tests for db.py and seed.py using isolated temp databases.
 Never writes to the demo database (D-017).
