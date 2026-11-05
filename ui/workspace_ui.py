@@ -2,6 +2,8 @@
 import hashlib
 import json
 import os
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -295,6 +297,67 @@ def ai_details_dialog(case):
     ai_details(case)
 
 
+# AI reviews run in a background thread so the page stays usable. A review that blocked the page
+# script was stopped by any click during the 1 to 4 minutes it takes, and left stale copies of the
+# panel on screen. Keyed by workspace path and case; the saved run in the database stays the record.
+AI_IN_BACKGROUND=True
+_AI_JOBS={}
+_AI_JOBS_LOCK=threading.Lock()
+
+
+def _ai_job_key(path,case_id):
+    return (str(path),case_id)
+
+
+def ai_job_running(path,case_id):
+    job=_AI_JOBS.get(_ai_job_key(path,case_id))
+    return bool(job and job['thread'].is_alive())
+
+
+def start_ai_review(path,case_id,actor,token,label):
+    """Start one review. In the background it returns at once; the panel polls until it is done."""
+    if not AI_IN_BACKGROUND:
+        return run_ai_with_status(path,case_id,actor,token,label)
+    from ui import live
+    key=_ai_job_key(path,case_id)
+    with _AI_JOBS_LOCK:
+        if ai_job_running(path,case_id):return None
+        job={'started':time.monotonic(),'result':None}
+        def work():
+            try:job['result']=live.investigate_case(path,case_id,actor,request_id=token)
+            except Exception as exc:job['result']={'status':'error','error':str(exc)}
+        job['thread']=threading.Thread(target=work,name='ai-review-'+case_id[:8],daemon=True)
+        _AI_JOBS[key]=job
+        job['thread'].start()
+    return None
+
+
+def finish_ai_review(path,case_id):
+    """Once a background review has ended, give the next click a fresh request ID and say how it went."""
+    key=_ai_job_key(path,case_id)
+    with _AI_JOBS_LOCK:
+        job=_AI_JOBS.get(key)
+        if not job or job['thread'].is_alive():return False
+        _AI_JOBS.pop(key,None)
+    st.session_state['ai-generation-'+case_id]=str(uuid.uuid4())
+    ok=(job['result'] or {}).get('status')=='completed'
+    notice('AI review finished. Read the short summary, then decide yourself.' if ok else 'The AI review stopped. You can still review the case manually.','success' if ok else 'warning')
+    return True
+
+
+@st.fragment(run_every=3)
+def ai_review_progress(path,case_id):
+    """Only this small block refreshes while the review runs; the rest of the page is left alone."""
+    if finish_ai_review(path,case_id):
+        st.rerun(scope='app')
+    job=_AI_JOBS.get(_ai_job_key(path,case_id))
+    seconds=int(time.monotonic()-job['started']) if job else 0
+    with st.container(key='ai-review-progress'):
+        st.info('Reviewing the case records… '+str(seconds)+' s. This usually takes 1 to 4 minutes. '
+                'You can keep reading the case; this updates by itself. Read-only: nothing is changed or sent.',
+                icon=':material/hourglass_top:')
+
+
 def run_ai_with_status(path,case_id,actor,token,label):
     """Show what the review is doing while it runs, then a short result toast."""
     with st.status(label+'…',expanded=True) as box:
@@ -313,6 +376,11 @@ def ai_brief(case):
     from ui import flow
     path,actor=context()
     if actor["role"]=="partner_user":return
+    finish_ai_review(path,case['case_id'])
+    if ai_job_running(path,case['case_id']):
+        st.html('<p class="eyebrow">AI REVIEW</p>')
+        ai_review_progress(path,case['case_id'])
+        return
     state=case_ai_state(path,case["case_id"],actor)
     report=state['report']
     can_start=actor['role'] in ('admin','investigator')
@@ -322,7 +390,7 @@ def ai_brief(case):
             and case['case_id'] not in attempted):
         # Settings → "Run AI review automatically": once per case per visit, never a retry loop.
         attempted.append(case['case_id'])
-        run_ai_with_status(path,case['case_id'],actor,token,'Running the AI review automatically')
+        start_ai_review(path,case['case_id'],actor,token,'Running the AI review automatically')
         st.rerun()
     st.html('<p class="eyebrow">AI REVIEW</p>')
     level=('success' if state['state']=='completed' else 'info' if state['state'] in
@@ -356,7 +424,7 @@ def ai_brief(case):
         st.caption('Optional. The AI reads the case records and suggests a next step; a person decides.')
     with st.container(key='ai-brief-actions',horizontal=True):
         if can_start and st.button(state['action'],type='secondary' if suggestion else 'primary',disabled=not state['can_run'],key='ai-'+case['case_id']+'-'+token):
-            run_ai_with_status(path,case['case_id'],actor,token,'Reviewing the case records')
+            start_ai_review(path,case['case_id'],actor,token,'Reviewing the case records')
             st.rerun()
         if state['state']=='running' and st.button('Refresh review status'):
             st.rerun()

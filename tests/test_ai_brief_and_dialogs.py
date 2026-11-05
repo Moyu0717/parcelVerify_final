@@ -112,3 +112,25 @@ def test_switch_button_keeps_the_header_dropdown_in_step(app):
     healthy(app)
     assert app.session_state.actor_role == 'approver'
     assert app.selectbox(key='desktop-role').value == 'approver'
+
+
+def test_ai_review_runs_in_the_background_and_the_page_picks_up_the_result(app, monkeypatch):
+    import time
+    import ui.workspace_ui as work
+    monkeypatch.setattr(work, 'AI_IN_BACKGROUND', True)
+    provider = _review(app, monkeypatch)
+    case_id = open_main(app)
+    first_token = app.session_state['ai-generation-' + case_id]
+    widget(app.button, 'Review evidence with AI').click().run()
+    healthy(app)
+    path = app.session_state.db_path
+    for _ in range(100):
+        if not work.ai_job_running(path, case_id):
+            break
+        time.sleep(0.05)
+    assert len(provider.calls) == 2
+    app.run()
+    healthy(app)
+    assert app.session_state['ai-generation-' + case_id] != first_token, 'the next click must get a new request ID'
+    assert app.button(key='ai-details-' + case_id)
+    assert not work.ai_job_running(path, case_id)
