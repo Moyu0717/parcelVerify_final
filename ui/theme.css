@@ -187,11 +187,17 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
 }
 
 @media (min-width:768px) and (max-width:1100px){
-  .st-key-desktop-header [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:minmax(220px,1fr) repeat(3,76px) 100px 48px;align-items:center}
-  .st-key-desktop-header [data-testid="stColumn"]{width:100%!important}
-  .st-key-desktop-header [data-testid="stColumn"]:nth-child(5){grid-row:2;grid-column:1 / -1}
+  /* Two rows: brand, Act as, Reset demo and account on top; the four page links below. */
+  .st-key-desktop-header [data-testid="stHorizontalBlock"]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(205px,1.8fr) minmax(120px,1fr) 56px;gap:8px 6px;align-items:center}
+  .st-key-desktop-header [data-testid="stColumn"]{width:100%!important;min-width:0!important}
+  .st-key-desktop-header [data-testid="stColumn"]:nth-child(1){grid-row:1;grid-column:1 / span 4}
+  .st-key-desktop-header [data-testid="stColumn"]:nth-child(2){grid-row:2;grid-column:1}
+  .st-key-desktop-header [data-testid="stColumn"]:nth-child(3){grid-row:2;grid-column:2}
+  .st-key-desktop-header [data-testid="stColumn"]:nth-child(4){grid-row:2;grid-column:3}
+  .st-key-desktop-header [data-testid="stColumn"]:nth-child(5){grid-row:2;grid-column:4}
   .st-key-desktop-header [data-testid="stColumn"]:nth-child(6){grid-row:1;grid-column:5}
   .st-key-desktop-header [data-testid="stColumn"]:nth-child(7){grid-row:1;grid-column:6}
+  .st-key-desktop-header [data-testid="stColumn"]:nth-child(8){grid-row:1;grid-column:7}
   .st-key-desktop-header .demo-tag{display:none}
 }
 
