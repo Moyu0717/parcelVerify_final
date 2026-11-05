@@ -351,3 +351,7 @@ input,textarea,[data-baseweb="select"]>div{border-radius:14px!important}
 .st-key-desktop-role div:has(>input):hover{background:#f0b92e!important}
 .st-key-desktop-role input{color:var(--ink)!important;-webkit-text-fill-color:var(--ink)!important}
 .st-key-desktop-role button,.st-key-desktop-role button svg{color:var(--ink)!important}
+/* Reset demo: red, so it stands out from the yellow Act as and reads as a reset. */
+.st-key-desktop-reset-demo button{background:var(--red)!important;border-color:var(--red)!important;color:#fff!important;border-radius:999px}
+.st-key-desktop-reset-demo button:hover{background:var(--red-ink)!important;border-color:var(--red-ink)!important}
+.st-key-desktop-reset-demo button p{color:#fff!important}
