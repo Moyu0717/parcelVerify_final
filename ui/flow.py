@@ -57,8 +57,11 @@ def phase_of(case, tasks, actions):
 
 def switch_role(role):
     st.session_state.actor_role = role
-    for key in ('role_widget', 'desktop-role', 'mobile-role'):
-        st.session_state.pop(key, None)
+    st.session_state.pop('role_widget', None)
+    # Set the header dropdowns to the new role rather than dropping their keys: a dropped key lets the
+    # browser send the old choice back on the next rerun, which switched the role straight back.
+    for key in ('desktop-role', 'mobile-role'):
+        st.session_state[key] = role
 
 
 def role_shortcut(role, why):

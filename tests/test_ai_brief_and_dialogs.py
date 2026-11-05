@@ -102,3 +102,13 @@ def test_activity_page_shows_the_last_opened_case_and_role_dropdown_switches(app
     app.selectbox(key='desktop-role').set_value('approver').run()
     healthy(app)
     assert app.session_state.actor_role == 'approver'
+
+
+def test_switch_button_keeps_the_header_dropdown_in_step(app):
+    """The in-step Switch button must update the header dropdown too, or the browser sends the old role back."""
+    case_id = open_main(app)
+    app.button(key='send-request-' + case_id).click().run()
+    app.button(key='switch-approver').click().run()
+    healthy(app)
+    assert app.session_state.actor_role == 'approver'
+    assert app.selectbox(key='desktop-role').value == 'approver'
